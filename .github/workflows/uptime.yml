@@ -1,0 +1,36 @@
+name: Uptime Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Health check
+    runs-on: ubuntu-latest
+    env:
+      PUBLIC_API_URL: ${{ secrets.PUBLIC_API_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run health checks
+        run: node scripts/uptime-check.mjs
+      - name: Open issue when service is down
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list --state open --limit 50)
+          if ! printf '%s' "$existing" | grep -q 'Service down'; then
+            gh issue create \
+              --title "Service down" \
+              --body "One or more Docket health checks failed at $(date -u).
+
+See the failing run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" > /dev/null
+          fi

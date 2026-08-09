@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary meta tags -->
+    <title>Docket — Tests from screens & specs in one click.</title>
+    <meta name="description" content="Drop a screenshot. Paste a PRD. Docket generates a complete, executable test matrix — covering happy paths, edge cases, and error states — in seconds, not hours." />
+    <meta name="theme-color" content="#f9f9f8" />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- Open Graph / Social sharing -->
+    <meta property="og:title" content="Docket — AI-Powered Test Generation" />
+    <meta property="og:description" content="From UI to test matrix in seconds. No prompt engineering. No configuration." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Docket — AI-Powered Test Generation" />
+    <meta name="twitter:description" content="From UI to test matrix in seconds. No prompt engineering. No configuration." />
+
+    <!-- PWA / App -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Font: preconnect + async loading for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Critical CSS for above-the-fold content with font fallback stacks -->
+    <style>
+      body { margin: 0; background: #f9f9f8; }
+      .dark body { background: #121414; }
+      #root { min-height: 100svh; }
+      /* Font fallback stack so text is visible immediately */
+      h1, h2, h3, h4 { font-family: 'Geist', system-ui, sans-serif; }
+      body, p, span, div { font-family: 'Inter', system-ui, sans-serif; }
+      code, pre, kbd { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    </style>
+
+    <!-- Non-critical fonts load asynchronously (no render-blocking) -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;450;500;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+
+    <noscript>
+      <!-- Fallback for browsers without JS -->
+      <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;450;500;700&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    </noscript>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
