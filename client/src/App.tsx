@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider, useLocation, Outlet } from 'react-router-dom'
 import { useEffect, Suspense, lazy } from 'react'
 import { trackPageView } from '@/lib/analytics'
+import { SITE_URL } from '@/lib/seo'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthGuard } from '@/components/AuthGuard'
 import { Layout } from '@/components/Layout'
@@ -112,10 +113,38 @@ function ThemeInit() {
   return null
 }
 
+/**
+ * Central crawler directives for the SPA: only the marketing page is
+ * indexable; auth and authenticated pages are noindex (thin, private content).
+ */
+function SeoManager() {
+  const location = useLocation()
+  useEffect(() => {
+    const isIndexable = location.pathname === '/'
+    const robots = document.querySelector('meta[name="robots"]')
+    robots?.setAttribute('content', isIndexable ? 'index, follow' : 'noindex, nofollow')
+
+    // Canonical: the marketing page is the only page with meaningful SEO value.
+    let canonical = document.querySelector('link[rel="canonical"]')
+    if (isIndexable) {
+      if (!canonical) {
+        canonical = document.createElement('link')
+        canonical.setAttribute('rel', 'canonical')
+        document.head.appendChild(canonical)
+      }
+      canonical.setAttribute('href', SITE_URL + '/')
+    } else {
+      canonical?.remove()
+    }
+  }, [location.pathname])
+  return null
+}
+
 /** Root layout wraps all pages so PageViewTracker is inside router context */
 function RootLayout() {
   return (
     <>
+      <SeoManager />
       <ThemeInit />
       <PageViewTracker />
       <Outlet />

@@ -16,9 +16,9 @@ import { SignIn } from '@/pages/SignIn'
 import { SignUp } from '@/pages/SignUp'
 
 vi.mock('@/lib/supabase', () => ({
+  supabaseUrl: 'https://example.supabase.co',
+  supabaseAnonKey: 'test-anon-key',
   supabase: {
-    supabaseUrl: 'https://example.supabase.co',
-    supabaseKey: 'test-anon-key',
     auth: {
       onAuthStateChange: vi.fn(() => ({
         data: { subscription: { unsubscribe: vi.fn() } },

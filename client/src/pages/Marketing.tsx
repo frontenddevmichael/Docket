@@ -364,6 +364,25 @@ export function Marketing() {
     if (user) navigate('/sessions', { replace: true })
   }, [user, navigate])
 
+  // FAQPage structured data, built from the same FAQ_DATA the visible section renders,
+  // so the two can never drift apart. Replaced on every render; removed on unmount.
+  useEffect(() => {
+    const script = document.createElement('script')
+    script.type = 'application/ld+json'
+    script.dataset.testid = 'faq-jsonld'
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: FAQ_DATA.map(({ q, a }) => ({
+        '@type': 'Question',
+        name: q,
+        acceptedAnswer: { '@type': 'Answer', text: a },
+      })),
+    })
+    document.head.appendChild(script)
+    return () => script.remove()
+  }, [])
+
   const testimonialSlides = makeSlides(TESTIMONIALS)
 
   return (

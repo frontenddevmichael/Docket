@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://client-indol-two-76.vercel.app/sitemap.xml
