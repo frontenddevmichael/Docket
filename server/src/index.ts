@@ -137,6 +137,10 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
   })
 }
 
+// Mount billing FIRST: every other /api router begins with an unconditional
+// router.use(requireAuth), which would otherwise 401 the public billing routes
+// (config, webhook) before they are ever reached.
+app.use('/api', billingRouter)
 app.use('/api', screenshotRouter)
 app.use('/api', generateRouter)
 app.use('/api', trackingRouter)
@@ -150,7 +154,6 @@ app.use('/api', workspaceRouter)
 app.use('/api', projectsRouter)
 app.use('/api', issueLogRouter)
 app.use('/api', accountRouter)
-app.use('/api', billingRouter)
 
 // Final error handler — sync throws from any route land here instead of
 // crashing the process. Returns a generic message (no internals leaked).
