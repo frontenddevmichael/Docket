@@ -21,6 +21,7 @@ import { MyProjects } from '@/pages/MyProjects'
 import { ProjectDetail } from '@/pages/ProjectDetail'
 import { IssueLog } from '@/pages/IssueLog'
 import { Settings } from '@/pages/Settings'
+import { Upgrade } from '@/pages/Upgrade'
 import { NotFound } from '@/pages/NotFound'
 
 /* Lazy-loaded pages that include framer-motion — code-split so the library
@@ -178,6 +179,7 @@ const router = createBrowserRouter([
           { path: '/projects/my', element: <MyProjects />, errorElement: <RouteErrorBoundary /> },
           { path: '/projects/:id', element: <ProjectDetail />, errorElement: <RouteErrorBoundary /> },
           { path: '/projects/:id/issue-log', element: <IssueLog />, errorElement: <RouteErrorBoundary /> },
+          { path: '/upgrade', element: <Upgrade />, errorElement: <RouteErrorBoundary /> },
           { path: '/settings', element: <Settings />, errorElement: <RouteErrorBoundary /> },
         ],
       },

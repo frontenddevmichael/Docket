@@ -714,7 +714,11 @@ export function Marketing() {
                       ))}
                     </ul>
                     <RippleButton
-                      onClick={() => navigate('/sign-up')}
+                      onClick={() =>
+                        plan.name === 'Free'
+                          ? navigate('/sign-up')
+                          : navigate(user ? `/upgrade?plan=${plan.name.toLowerCase()}` : `/sign-up?upgrade=${plan.name.toLowerCase()}`)
+                      }
                       className={`mt-auto w-full font-heading text-[11px] uppercase tracking-[0.06em] font-semibold py-2.5 rounded-lg transition-all active:scale-[0.97]
                         ${plan.featured ? 'bg-warning text-white hover:opacity-90' : 'bg-primary text-on-primary hover:opacity-90'}`}
                     >

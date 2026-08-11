@@ -136,6 +136,29 @@ docker run -d --restart unless-stopped -p 80:3001 --env-file .env.production doc
 | `EMAIL_FROM` | optional | sender address |
 | `FIGMA_ACCESS_TOKEN` | optional | Figma import |
 | `GITHUB_TOKEN` | optional | GitHub PR import |
+| `STRIPE_SECRET_KEY` | optional (to enable billing) | Stripe payments (test/live secret) |
+| `STRIPE_WEBHOOK_SECRET` | optional (to enable billing) | verify Stripe events at `/api/billing/webhook` |
+| `STRIPE_PRO_PRICE_ID` | optional (to enable Pro) | recurring monthly price for the Pro plan |
+| `STRIPE_ENTERPRISE_PRICE_ID` | optional | price for the Enterprise plan (custom amount) |
+
+### Billing (Stripe)
+
+Billing degrades gracefully: with no Stripe env vars, the marketing pricing CTAs still route
+through `/upgrade`, and the API returns `501 billing_not_configured` so the UI shows a clear
+"Payments aren't enabled yet" state instead of breaking. To activate payments:
+
+1. Create prices in Stripe (Billing → Products): a recurring **monthly** price for Pro
+   (e.g. $19/mo) and optionally one for Enterprise; set `STRIPE_PRO_PRICE_ID` /
+   `STRIPE_ENTERPRISE_PRICE_ID`.
+2. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`.
+3. Add a webhook endpoint in the Stripe dashboard → `https://<api-host>/api/billing/webhook`
+   with events: `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted`. (Render's free tier can sleep — a paid/always-on plan
+   keeps webhooks reliable.)
+
+Plan enforcement: free workspaces get **25 generations/month** (`usage_events` table, migration
+018); Pro/Enterprise are unlimited. `POST /api/generate` returns `402 generation_limit` when
+over quota. The limit check is fail-open — a billing DB hiccup never blocks generation.
 
 Note: `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are baked into the client bundle at
 build time, so they must be present as **build-time** secrets if the host rebuilds the image

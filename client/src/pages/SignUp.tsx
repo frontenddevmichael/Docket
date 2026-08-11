@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -123,6 +123,8 @@ export function SignUp() {
   const { signUp, signInWithOAuth } = useAuth()
   const sso = useSsoProviders()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const upgradePlan = searchParams.get('upgrade')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState('')
@@ -312,7 +314,7 @@ export function SignUp() {
           heading="Account created"
           message="Welcome to Docket. Setting up your workspace…"
           email={submittedEmail}
-          onRedirect={() => navigate('/sessions', { replace: true })}
+          onRedirect={() => navigate(upgradePlan ? `/upgrade?plan=${upgradePlan}` : '/sessions', { replace: true })}
           onSignIn={() => navigate('/sign-in', { replace: true })}
         />
       )}

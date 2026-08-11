@@ -44,6 +44,7 @@ import workspaceRouter from './routes/workspace.js'
 import projectsRouter from './routes/projects.js'
 import issueLogRouter from './routes/issue-log.js'
 import accountRouter from './routes/account.js'
+import billingRouter from './routes/billing.js'
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
@@ -75,6 +76,10 @@ function parseOrigin(origin: string | undefined): string | string[] {
 
 app.use(helmet({ contentSecurityPolicy: false }))
 app.use(cors({ origin: parseOrigin(process.env.CLIENT_ORIGIN) }))
+// Stripe webhooks must be verified against the raw request body, so parse this
+// one route with express.raw *before* the global JSON parser. body-parser skips
+// already-parsed bodies, so the billing router sees the Buffer intact.
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '10mb' }))
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
 
@@ -145,6 +150,7 @@ app.use('/api', workspaceRouter)
 app.use('/api', projectsRouter)
 app.use('/api', issueLogRouter)
 app.use('/api', accountRouter)
+app.use('/api', billingRouter)
 
 // Final error handler — sync throws from any route land here instead of
 // crashing the process. Returns a generic message (no internals leaked).

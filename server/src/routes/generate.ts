@@ -8,6 +8,7 @@ import { generateLimiter } from '../lib/rate-limiter.js'
 import { trackEvent } from '../lib/tracking.js'
 import { logActivity } from '../lib/activity-log.js'
 import { requireAuth } from '../lib/auth-middleware.js'
+import { assertGenerationAllowed, recordUsage } from '../lib/billing.js'
 
 const testCaseSchema = z.object({
   title: z.string(),
@@ -328,6 +329,30 @@ router.post('/generate', generateLimiter, async (req, res) => {
     if (rows) inputs = rows as InputData[]
   } catch (err) {
     console.warn('[generate] failed to load session_inputs:', err)
+  }
+
+  // ── Plan limit: free workspaces get PLANS.free.generationsPerMonth / month ──
+  try {
+    const db = req.supabase!
+    const { data: sessionRow } = await db
+      .from('sessions')
+      .select('workspace_id')
+      .eq('id', sessionId)
+      .maybeSingle()
+    if (sessionRow?.workspace_id) {
+      const allowed = await assertGenerationAllowed(db, sessionRow.workspace_id as string)
+      if (!allowed.ok) {
+        return res.status(402).json({
+          error: `Free plan limit reached (${allowed.used}/${allowed.limit} generations this month). Upgrade to Pro for unlimited generation.`,
+          code: 'generation_limit',
+        })
+      }
+      // Recorded before the run starts — a generation is consumed once started.
+      await recordUsage(db, sessionRow.workspace_id as string, 'generation')
+    }
+  } catch (err) {
+    // Fail-open: a billing hiccup must never block the product.
+    console.warn('[generate] usage check failed, allowing:', err)
   }
 
   const genId = crypto.randomUUID()

@@ -1,7 +1,7 @@
 import { useStaggerOnce } from '@/hooks/useStaggerOnce'
 import { StaggerItem } from '@/components/react-bits/StaggerItem'
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
@@ -67,6 +67,37 @@ export function Settings() {
     queryKey: ['tracking-stats'],
     queryFn: () => fetchWithAuth('/api/tracking/stats').then((r) => r.json()),
   })
+
+  // Billing: current plan + monthly generation usage
+  const { data: billing } = useQuery({
+    queryKey: ['billing-plan'],
+    queryFn: () => fetchWithAuth('/api/billing/plan').then((r) => r.json()),
+  })
+
+  // Customer portal for managing/canceling the subscription
+  const portalOpen = useMutation({
+    mutationFn: async () => {
+      const res = await fetchWithAuth('/api/billing/portal', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not open billing portal')
+      return data.url as string
+    },
+    onSuccess: (url) => {
+      if (url) window.location.href = url
+    },
+    onError: (err: any) => toast(err?.message || 'Could not open billing portal', 'error'),
+  })
+
+  // Toast when Stripe redirects back here after a successful checkout
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('billing') === 'success') {
+      toast('Subscription updated', 'success')
+      searchParams.delete('billing')
+      navigate(window.location.pathname, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Update profile mutation
   const updateProfile = useMutation({
@@ -199,8 +230,72 @@ export function Settings() {
           </div>
         </section></StaggerItem>
 
-        {/* Preferences Section */}
+        {/* Billing Section */}
         <StaggerItem index={2}><section className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-6 shadow-rest card-interactive flex flex-col gap-6">
+          <div className="border-b border-outline-variant pb-4 flex items-center justify-between">
+            <h3 className="font-heading text-[11px] uppercase tracking-[0.05em] text-on-surface-variant font-semibold">Plan & Billing</h3>
+            {billing?.plan && billing.plan !== 'free' && (
+              <span className="font-heading text-[10px] uppercase tracking-[0.05em] font-semibold bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1">
+                {billing.label}
+              </span>
+            )}
+          </div>
+
+          {billing ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-heading text-[15px] font-semibold text-primary">
+                    {billing.plan === 'free' ? 'Free plan' : `${billing.label} plan`}
+                  </div>
+                  <div className="text-[13px] text-on-surface-variant mt-1">
+                    {billing.generationsPerMonth === null
+                      ? 'Unlimited generations'
+                      : `${billing.generationsUsed ?? 0} of ${billing.generationsPerMonth} generations used this month`}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  {billing.plan === 'free' ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/upgrade?plan=pro')}
+                      className="bg-warning text-white rounded-lg px-4 py-2 font-heading text-[11px] uppercase tracking-[0.05em] font-semibold hover:opacity-90 active:scale-[0.97] transition-all duration-150"
+                    >
+                      Upgrade to Pro
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => portalOpen.mutate()}
+                      disabled={portalOpen.isPending}
+                      className="bg-primary text-on-primary rounded-lg px-4 py-2 font-heading text-[11px] uppercase tracking-[0.05em] font-semibold hover:opacity-90 active:scale-[0.97] transition-all duration-150 disabled:opacity-40"
+                    >
+                      {portalOpen.isPending ? 'Opening…' : 'Manage subscription'}
+                    </button>
+                  )}
+                  {!billing.stripeConfigured && (
+                    <div className="text-[11.5px] text-on-surface-variant/70">Payments not enabled on this deployment</div>
+                  )}
+                </div>
+              </div>
+              {billing.generationsPerMonth !== null && (
+                <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-warning rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, Math.round(((billing.generationsUsed ?? 0) / billing.generationsPerMonth) * 100))}%`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-[13px] text-on-surface-variant animate-pulse">Loading your plan…</div>
+          )}
+        </section></StaggerItem>
+
+        {/* Preferences Section */}
+        <StaggerItem index={3}><section className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-6 shadow-rest card-interactive flex flex-col gap-6">
           <div className="border-b border-outline-variant pb-4">
             <h3 className="font-heading text-[11px] uppercase tracking-[0.05em] text-on-surface-variant font-semibold">Preferences</h3>
           </div>
@@ -243,7 +338,7 @@ export function Settings() {
         </section></StaggerItem>
 
         {/* Security Section */}
-        <StaggerItem index={3}><section className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-6 shadow-rest card-interactive flex flex-col gap-6">
+        <StaggerItem index={4}><section className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-6 shadow-rest card-interactive flex flex-col gap-6">
           <div className="border-b border-outline-variant pb-4">
             <h3 className="font-heading text-[11px] uppercase tracking-[0.05em] text-on-surface-variant font-semibold">Security</h3>
           </div>
@@ -312,7 +407,7 @@ export function Settings() {
 
         {/* Account Stats */}
         {stats && (
-          <StaggerItem index={4}><section className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-6 shadow-rest card-interactive flex flex-col gap-4">
+          <StaggerItem index={5}><section className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-6 shadow-rest card-interactive flex flex-col gap-4">
             <div className="border-b border-outline-variant pb-4">
               <h3 className="font-heading text-[11px] uppercase tracking-[0.05em] text-on-surface-variant font-semibold">Usage</h3>
             </div>
@@ -339,7 +434,7 @@ export function Settings() {
         )}
 
         {/* Sign Out + Delete Account */}
-        <StaggerItem index={5}><section className="mt-8 pt-8 border-t border-outline-variant flex flex-col items-start gap-4">
+        <StaggerItem index={6}><section className="mt-8 pt-8 border-t border-outline-variant flex flex-col items-start gap-4">
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
