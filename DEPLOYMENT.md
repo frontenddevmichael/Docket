@@ -20,9 +20,24 @@ Both use managed Supabase (database, auth, storage).
 | OpenRouter API key | ✅ present | Used for test-case generation (Gemini 2.5 Flash). |
 | Resend API key | ⚠️ optional | Needed for invite/assign/reject/draft emails. Without it emails are logged, not sent. |
 | Email domain + `EMAIL_FROM` | ⚠️ if using Resend | e.g. `Docket <noreply@yourdomain.com>` with the domain verified in Resend. |
-| Hosting account | REQUIRED | Docker-capable host: Render, Railway, Fly.io, or any VPS with Docker — or Vercel for the SPA only (§4). |
-| `CLIENT_ORIGIN` set to the real production URL | REQUIRED | Used in email links. Without it emails point at `http://localhost:5175`. |
-| `PUBLIC_API_URL` GitHub secret | ⚠️ | Powers the Uptime Monitor workflow (`.github/workflows/uptime.yml`). |
+| Hosting account | ✅ done | SPA live on Vercel, API live on Render (see Live URLs below). |
+| `CLIENT_ORIGIN` set to the real production URL | ✅ done | `https://client-indol-two-76.vercel.app` (set on the Render service). |
+| `PUBLIC_API_URL` GitHub secret | ⚠️ pending | Powers the Uptime Monitor workflow (`.github/workflows/uptime.yml`). Needs a GitHub token with **Actions** permission. |
+
+---
+
+## Live URLs (deployed 2026-08-11)
+
+| Service | URL | Status |
+|---|---|---|
+| SPA (Vercel, production) | https://client-indol-two-76.vercel.app | ✅ live |
+| API (Render, free) | https://docket-api-pb0d.onrender.com | ✅ live — `/api/health` returns `serviceRoleOk: true` |
+| Supabase (managed) | project `nbeiexnlnmpdbdfdqrjr` | ✅ live |
+
+Render free-tier note: the service **spins down after ~15 min idle**; the first request after
+idle takes ~30–60 s to wake (returns 404 while waking). Upgrade the Render plan (or add a
+cron ping) if the client expects always-on responses. GitHub secrets `PUBLIC_API_URL` +
+`SUPABASE_URL` + `SUPABASE_ANON_KEY` are still needed to start the 15-min uptime monitor.
 
 ---
 
