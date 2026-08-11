@@ -1,11 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
-// No real network in tests — the SSO pre-flight probe would otherwise try to
-// reach Supabase. A rejected fetch is the same as "can't reach server" and
-// falls through to the mocked signInWithOAuth.
+// No real network in tests — the SSO pre-flight probe and the provider-availability
+// settings call are stubbed. Default: both Google and GitHub enabled (the common
+// production state), so existing SSO-button assertions keep passing.
+function stubFetch(settings = { google: true, github: true }) {
+  vi.stubGlobal('fetch', vi.fn((url) => {
+    if (String(url).includes('/auth/v1/settings')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ external: settings }),
+      })
+    }
+    return Promise.reject(new Error('network disabled in tests'))
+  }))
+}
+
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network disabled in tests'))))
+  stubFetch()
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -87,14 +99,14 @@ describe('SignIn screen', () => {
     expect(screen.getByText(/Test cases that stamp/i)).toBeInTheDocument()
   })
 
-  it('renders SSO buttons and password toggle', () => {
+  it('renders SSO buttons and password toggle', async () => {
     render(
       <MemoryRouter>
         <SignIn />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /github/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /google/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /github/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /show password/i })).toBeInTheDocument()
   })
 
@@ -149,6 +161,21 @@ describe('SignIn screen', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     // Form stays put when sign-in fails.
     expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument()
+  })
+
+  it('hides the GitHub button while the provider is disabled', async () => {
+    stubFetch({ google: true, github: false })
+    render(
+      <MemoryRouter>
+        <SignIn />
+      </MemoryRouter>,
+    )
+    // Google stays visible…
+    expect(await screen.findByRole('button', { name: /google/i })).toBeInTheDocument()
+    // …and GitHub disappears once the settings load.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /github/i })).not.toBeInTheDocument()
+    })
   })
 
   it('shows the error banner when an SSO provider is unavailable', async () => {
