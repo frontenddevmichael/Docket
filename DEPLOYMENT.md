@@ -151,8 +151,11 @@ Use this when you want the frontend on Vercel. The API stays on a container host
 (AI generation can run 20–60 s; Pro raises this to 300 s).
 
 1. Deploy the **client** (`client/`) to Vercel — the repo has `client/vercel.json`
-   (Vite preset, `dist` output, SPA rewrites). Set as build-time env vars:
-   `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and
+   (Vite preset, `dist` output, SPA rewrites). **Set the Vercel project's Root
+   Directory to `client`** (Project → Settings → General). If it stays at the repo
+   root, git-triggered builds run the root `package.json` script with only root
+   dependencies installed and fail with `tsc: command not found`. Set as build-time
+   env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and
    `VITE_API_URL=https://<api-host>` (the container's public URL, no trailing slash).
 2. Deploy the **API** per §3 with `CLIENT_ORIGIN=https://<vercel-app>.vercel.app` so
    CORS and email links point at the SPA.
