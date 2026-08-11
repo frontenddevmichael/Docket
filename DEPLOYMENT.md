@@ -1,7 +1,12 @@
 # Docket — Deployment Checklist & Runbook
 
-Target topology: **one container** (Express API + built Vite SPA) + **managed Supabase**
-(database, auth, storage). This keeps deployment to a single artifact with no CORS.
+Two supported topologies — pick one:
+
+1. **Single container (recommended)** — Express API + built Vite SPA served from one
+   process on Render/Railway/Fly/VPS. One artifact, no CORS, no platform limits.
+2. **Split (Vercel frontend)** — SPA on Vercel static, API on a container host. See §4.
+
+Both use managed Supabase (database, auth, storage).
 
 ---
 
@@ -9,13 +14,13 @@ Target topology: **one container** (Express API + built Vite SPA) + **managed Su
 
 | Item | Status | Notes |
 |---|---|---|
-| Valid Supabase **service role key** | **REQUIRED — currently broken** | The key in `.env.local` returns `Invalid API key`. Generate a new one in Supabase → Settings → API → `service_role`. Without it, Projects, Issue Log, Generation and Account deletion return errors. |
+| Valid Supabase **service role key** | ✅ done | Rotated via the Management API and installed in `.env.local`; `/api/health` reports `serviceRoleOk: true`. |
 | Valid Supabase URL + anon key | ✅ present | Already configured and working. |
+| Database migrations | ✅ done | `001`–`016` all applied to the live project (`016` adds account-deletion cascades). |
 | OpenRouter API key | ✅ present | Used for test-case generation (Gemini 2.5 Flash). |
 | Resend API key | ⚠️ optional | Needed for invite/assign/reject/draft emails. Without it emails are logged, not sent. |
 | Email domain + `EMAIL_FROM` | ⚠️ if using Resend | e.g. `Docket <noreply@yourdomain.com>` with the domain verified in Resend. |
-| Database migrations applied | ⚠️ verify | `npx supabase link --project-ref <ref>` then `npx supabase db push`. Migrations `001–015` must all be applied. |
-| Hosting account | REQUIRED | Docker-capable host: Render, Railway, Fly.io, or any VPS with Docker. (This repo has no existing hosting config; see step 3.) |
+| Hosting account | REQUIRED | Docker-capable host: Render, Railway, Fly.io, or any VPS with Docker — or Vercel for the SPA only (§4). |
 | `CLIENT_ORIGIN` set to the real production URL | REQUIRED | Used in email links. Without it emails point at `http://localhost:5175`. |
 | `PUBLIC_API_URL` GitHub secret | ⚠️ | Powers the Uptime Monitor workflow (`.github/workflows/uptime.yml`). |
 
@@ -31,7 +36,7 @@ npm run typecheck            # from repo root — client + server
 npm run build                # root — builds client (Vite) + server (tsc)
 ```
 
-Expected: typecheck clean, **77 unit tests passing**, production build succeeds.
+Expected: typecheck clean, **88 unit tests + 14 e2e tests passing**, production build succeeds.
 
 Smoke-test the production artifact locally (optional):
 
@@ -63,7 +68,7 @@ docker run --rm -p 3001:3001 \
 
 ---
 
-## 3. Build & deploy the container
+## 3. Build & deploy the container (single-origin topology)
 
 Pick one host. All of them just run the `Dockerfile`.
 
@@ -118,7 +123,32 @@ build time, so they must be present as **build-time** secrets if the host rebuil
 
 ---
 
-## 4. Post-deploy verification (send-to-client gate)
+## 4. Split topology — SPA on Vercel + API on a container
+
+Use this when you want the frontend on Vercel. The API stays on a container host
+(§3 options A–D) because Vercel serverless functions cap request bodies at ~4.5 MB
+(api-spec/source-code uploads allow up to 50 MB) and Hobby function duration at ~60 s
+(AI generation can run 20–60 s; Pro raises this to 300 s).
+
+1. Deploy the **client** (`client/`) to Vercel — the repo has `client/vercel.json`
+   (Vite preset, `dist` output, SPA rewrites). Set as build-time env vars:
+   `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and
+   `VITE_API_URL=https://<api-host>` (the container's public URL, no trailing slash).
+2. Deploy the **API** per §3 with `CLIENT_ORIGIN=https://<vercel-app>.vercel.app` so
+   CORS and email links point at the SPA.
+3. The client already supports `VITE_API_URL` (`client/src/lib/api.ts`): when set, all
+   `/api/*` calls go to the container directly; when empty it falls back to same-origin
+   (the single-container topology needs no changes).
+4. Verification: the checklist in §5 applies unchanged — just confirm the browser calls
+   hit the container (network tab shows `https://<api-host>/api/...`).
+
+Known limits of the split topology: file uploads > ~4.5 MB routed through the SPA would
+need Vercel's proxy to stream them (not the default), so keep api-spec/source-code
+uploads under that size, or run uploads straight to Supabase Storage client-side.
+
+---
+
+## 5. Post-deploy verification (send-to-client gate)
 
 - [ ] `GET https://<app>/api/health` returns `{"status":"ok",...,"serviceRoleOk":true}`
       — `serviceRoleOk:false` means the Supabase service_role key is invalid; the server
@@ -139,7 +169,7 @@ build time, so they must be present as **build-time** secrets if the host rebuil
 
 ---
 
-## 5. Rollback
+## 6. Rollback
 
 - Render/Railway/Fly: redeploy the previous image/tag (all deploys are immutable builds).
 - Database: migrations are additive (`001–015`); no data-mutating backfills exist, so a
@@ -148,7 +178,7 @@ build time, so they must be present as **build-time** secrets if the host rebuil
 
 ---
 
-## 6. Known items that require owner action (cannot be done from code)
+## 7. Known items that require owner action (cannot be done from code)
 
 1. **Rotate the Supabase service role key** and put the new value in `.env.local` and the host.
 2. Choose a host (Render/Railway/Fly/VPS) and provide credentials if you want me to deploy.
