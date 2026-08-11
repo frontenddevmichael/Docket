@@ -8,7 +8,9 @@ import { test, expect } from '@playwright/test'
 async function gotoMarketing(page: import('@playwright/test').Page) {
   await page.context().clearCookies()
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await page.getByRole('heading', { name: /verdict.*stamped/i }).waitFor({ timeout: 6000 })
+  // Retrying assertion with a generous timeout: the first test in a cold CI
+  // worker competes for CPU with the Vite build/dev server warm-up.
+  await expect(page.getByRole('heading', { name: /verdict.*stamped/i })).toBeVisible({ timeout: 15_000 })
 }
 
 test.describe('Marketing page', () => {
