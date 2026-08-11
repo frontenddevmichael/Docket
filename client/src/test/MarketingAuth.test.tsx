@@ -1,5 +1,15 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+
+// No real network in tests — the SSO pre-flight probe would otherwise try to
+// reach Supabase. A rejected fetch is the same as "can't reach server" and
+// falls through to the mocked signInWithOAuth.
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network disabled in tests'))))
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 import { MemoryRouter } from 'react-router-dom'
 import { Marketing } from '@/pages/Marketing'
 import { SignIn } from '@/pages/SignIn'
@@ -7,6 +17,8 @@ import { SignUp } from '@/pages/SignUp'
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
+    supabaseUrl: 'https://example.supabase.co',
+    supabaseKey: 'test-anon-key',
     auth: {
       onAuthStateChange: vi.fn(() => ({
         data: { subscription: { unsubscribe: vi.fn() } },
@@ -137,6 +149,25 @@ describe('SignIn screen', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     // Form stays put when sign-in fails.
     expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument()
+  })
+
+  it('shows the error banner when an SSO provider is unavailable', async () => {
+    const { supabase } = await import('@/lib/supabase')
+    ;(supabase.auth.signInWithOAuth as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {},
+      // supabase-js auth errors are Error instances (AuthError), so authErrorText
+      // surfaces err.message directly.
+      error: new Error('Unsupported provider: provider is not enabled'),
+    })
+
+    render(
+      <MemoryRouter>
+        <SignIn />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /google/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/provider is not enabled/i)
   })
 })
 
