@@ -241,8 +241,10 @@ export function SessionReport() {
     setExportingPdf(true)
     try {
       // Loaded on demand so jspdf + html2canvas (~300 KB) stay out of the main bundle
+      // html2canvas-pro is a maintained fork of html2canvas that parses Tailwind v4's
+      // oklch()/lab() colors (the original 1.4.1 throws "unsupported color function lab").
       const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
+        import('html2canvas-pro'),
         import('jspdf'),
       ])
       const canvas = await html2canvas(reportRef.current, {
