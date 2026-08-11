@@ -76,6 +76,11 @@ docker run --rm -p 3001:3001 \
 3. Verify storage buckets exist: `screenshots` and `evidence` (see `supabase/migrations/002_storage.sql`).
 4. Confirm auth email settings (verification + password reset) point at the production URL,
    or use the SMTP block from `.env.example` with a verified sender.
+   **Required (live project already configured 2026-08-11):** Auth → URL Configuration must have
+   `Site URL` = `https://client-indol-two-76.vercel.app` and the **Redirect URLs** allow-list
+   must include `https://client-indol-two-76.vercel.app/reset-password` — GoTrue rejects
+   recovery/confirmation `redirect_to` values that aren't in the allow-list (the reset email
+   silently fails with a 400 otherwise).
 
 > If you already applied migrations to the current project, run `npx supabase migration list`
 > and make sure everything is marked as applied — none of the new tables (projects, issues,
