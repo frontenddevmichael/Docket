@@ -179,8 +179,8 @@ export function AuthShell({ title, subtitle, children, footer, doodle }: AuthShe
       {/* Brand strip — mobile (collapsed panel, not hidden) */}
       <div className="lg:hidden flex items-center justify-between gap-3 px-5 pt-5 pb-2">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-            <Icon name="workspaces" size={14} className="text-on-primary" />
+          <div className="w-7 h-7 rounded-lg bg-[#C77D25] flex items-center justify-center">
+            <Icon name="workspaces" size={14} className="text-[#141414]" />
           </div>
           <span className="font-heading text-[16px] text-primary tracking-tight font-semibold">Docket</span>
         </div>
@@ -201,13 +201,6 @@ export function AuthShell({ title, subtitle, children, footer, doodle }: AuthShe
           className="w-full max-w-md relative z-10"
         >
           <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg shadow-lifted p-6 sm:p-8">
-            <div className="flex items-center gap-2.5 mb-6">
-              <div className="w-8 h-8 rounded-md bg-primary text-on-primary flex items-center justify-center">
-                <Icon name="workspaces" size={16} />
-              </div>
-              <span className="font-heading text-[18px] text-primary tracking-tight font-semibold">Docket</span>
-            </div>
-
             <h1 className="font-heading text-[24px] font-semibold text-on-surface mb-1">{title}</h1>
             <p className="font-body-md text-[14px] text-on-surface-variant mb-6">{subtitle}</p>
 
