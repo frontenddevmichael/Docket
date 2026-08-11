@@ -18,7 +18,6 @@ ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
-COPY shared/ ../shared/
 RUN npm run build
 
 # ---- Stage 2: build the server -------------------------------------------
@@ -28,7 +27,6 @@ COPY server/package.json server/package-lock.json ./
 RUN npm ci
 COPY server/tsconfig.json ./
 COPY server/src/ ./src/
-COPY shared/ ../shared/
 RUN npx tsc
 
 # ---- Stage 3: runtime ------------------------------------------------------
