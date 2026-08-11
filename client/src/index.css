@@ -608,7 +608,12 @@ input:-webkit-autofill::first-line {
 
 /* Subtle noise texture overlay */
 .noise-overlay {
-  position: relative;
+  /* NOTE: do not set position here — callers use Tailwind's `absolute`/
+     `relative` utilities to take the overlay out of flow. A position rule
+     here would override the utility (later in the cascade) and turn the
+     overlay into an in-flow grid/flex child, breaking layouts like the
+     auth split screen (form pushed under the brand panel). The ::after
+     still anchors to the nearest positioned ancestor. */
 }
 .noise-overlay::after {
   content: '';
