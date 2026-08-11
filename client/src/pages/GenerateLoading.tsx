@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Icon } from '@/components/Icon'
-import { FALLBACK_LOADING_MESSAGES } from '@shared/loading-messages'
+import { FALLBACK_LOADING_MESSAGES } from '@/lib/loading-messages'
 
 type TipCategory = 'general' | 'new' | 'power' | 'team' | 'shortcut'
 

@@ -3,9 +3,8 @@ import { z } from 'zod'
 import OpenAI from 'openai'
 import { requireAuth } from '../lib/auth-middleware.js'
 
-// Mirror of shared/loading-messages.ts (client imports the shared copy via the
-// @shared alias). Kept server-local so the server build stays self-contained
-// and emits a clean dist/ layout without pulling in files above src/.
+// Mirror of client/src/lib/loading-messages.ts (the client keeps its own copy
+// so its build is self-contained for static hosts). Keep the two in sync.
 const FALLBACK_LOADING_MESSAGES = [
   'Parsing your requirements\u2026',
   'Mapping test scenarios\u2026',
