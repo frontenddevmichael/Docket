@@ -11,3 +11,4 @@ coverage/
 test-results/
 .freebuff/
 TEST MANAGEMENT TOOL PROJECT.xlsx
+e2e.local.config.mjs

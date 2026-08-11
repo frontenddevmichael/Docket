@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import { useAuth } from '../hooks/useAuth'
 import AnimatedContent from '../components/react-bits/AnimatedContent'
 import TiltedCard from '../components/react-bits/TiltedCard'
@@ -11,6 +11,7 @@ import AnimatedList from '../components/react-bits/AnimatedList'
 import Carousel from '../components/react-bits/Carousel'
 import Folder from '../components/react-bits/Folder'
 import Beams from '../components/react-bits/Beams'
+import { Stamp } from '../components/Stamp'
 import {
   ScreenToCases,
   PrdToMatrix,
@@ -24,49 +25,67 @@ import { StaggerItem } from '../components/react-bits/StaggerItem'
 
 /* ── Data ── */
 
+const HERO_CASES = [
+  { title: 'Login rejects short password', ref: 'PRD §2.3', verdict: 'pass' as const },
+  { title: 'Password reset expiry window', ref: 'PRD §4.1', verdict: 'fail' as const },
+  { title: 'Remember-me checkbox persists', ref: 'PRD §2.5', verdict: 'pass' as const },
+  { title: 'Lockout after 5 failed attempts', ref: 'PRD §2.8', verdict: 'pass' as const },
+  { title: 'Session expires on idle', ref: 'PRD §2.9', verdict: 'pass' as const },
+  { title: 'Error state on malformed OTP', ref: 'PRD §3.2', verdict: 'fail' as const },
+]
+
+const LOGO_WALL = ['NORTHWIND', 'HELIO LABS', 'VANTAGE', 'KANVAS', 'SIGNAL', 'TRAILHEAD']
+
+const METRICS = [
+  { value: 12400, suffix: '+', label: 'test cases generated' },
+  { value: 96, suffix: '%', label: 'kept as-is after review' },
+  { value: 160, suffix: 's', label: 'screen to first report' },
+  { value: 11, suffix: '×', label: 'faster than manual matrices' },
+]
+
 const FEATURES = [
   {
     id: 'screen-to-cases',
     title: 'Screen → Cases',
-    desc: 'Drop a screenshot. Docket reads every button, input, modal, and error state. Test cases appear. No prompt engineering needed.',
+    desc: 'Drop a screenshot. Docket reads every button, input, modal, and error state. Test cases appear — no prompt engineering.',
     illustration: <ScreenToCases className="w-16 h-16 md:w-20 md:h-20" />,
   },
   {
     id: 'prd-to-matrix',
     title: 'PRD → Matrix',
-    desc: 'Paste your PRD. The AI extracts requirements, edge cases, and constraints. A full coverage matrix in seconds.',
+    desc: 'Paste your PRD. The AI extracts requirements, edge cases, and constraints into a coverage matrix in seconds.',
     illustration: <PrdToMatrix className="w-12 h-12 md:w-14 md:h-14" />,
   },
   {
     id: 'live-execution',
     title: 'Live Execution',
-    desc: 'Run cases against staging or production. Results stream in real time. Pass/fail per step. No polling.',
+    desc: 'Run cases with 8 verdicts — pass, fail, blocked, N/A, fixed, reopened, controlled live, UAT — each stamped with evidence.',
     illustration: <LiveExecution className="w-12 h-12 md:w-14 md:h-14" />,
   },
   {
     id: 'workspace-dashboard',
     title: 'Workspace Dashboard',
-    desc: 'A single view of all sessions, pass rates, blockers, and team activity. Filter, sort, drill in.',
+    desc: 'One view of sessions, pass rates, blockers, and team activity. Filter, sort, drill in, export.',
     illustration: <WorkspaceDashboard className="w-12 h-12 md:w-14 md:h-14" />,
   },
   {
     id: 'drag-organize',
     title: 'Drag & Organize',
-    desc: 'Reorder cases, drag into groups, bulk-delete, bulk-pass. The workspace is fast because it skips the ceremony.',
+    desc: 'Reorder cases, bulk-select, bulk-delete. The workspace skips the ceremony so review stays fast.',
     illustration: <DragOrganize className="w-full max-w-[120px] h-12" />,
   },
   {
     id: 'export-integrate',
-    title: 'Export & Integrate',
-    desc: 'PDF reports, JSON exports, Jira sync, Linear integration. Your data belongs in your workflow, not locked in a tool.',
+    title: 'Export & Share',
+    desc: 'Editable PDF reports, CSV, and JSON export. A shareable verdict your team can actually read.',
     illustration: <ExportIntegrate className="w-full max-w-[120px] h-12" />,
   },
 ]
 
 const HOW_STEPS = [
-  { step: 'Upload', desc: 'Upload a screenshot or paste a URL. Add your requirements text.', metric: '4.2s', metricLabel: 'avg generation' },
-  { step: 'Generate', desc: 'Docket cross-references both. A complete test matrix appears.', metric: '96%', metricLabel: 'kept as-is' },
-  { step: 'Execute & Report', desc: 'Run each case, stamp pass or fail, export the report.', metric: '3.1s', metricLabel: 'avg execution' },
+  { step: 'Upload', desc: 'Drop a screenshot or URL. Paste your requirements.', metric: '4.2s', metricLabel: 'avg generation' },
+  { step: 'Generate', desc: 'Docket cross-references both and drafts the matrix.', metric: '96%', metricLabel: 'kept as-is' },
+  { step: 'Execute & Report', desc: 'Stamp each case, add evidence, export the verdict.', metric: '3.1s', metricLabel: 'avg execution' },
 ]
 
 const TESTIMONIALS = [
@@ -77,11 +96,11 @@ const TESTIMONIALS = [
 ]
 
 const FAQ_DATA = [
-  { q: 'How does Docket generate test cases from screenshots?', a: 'Docket uses vision AI to analyze UI screenshots — detecting buttons, inputs, modals, and error states. Combined with your PRD text, it produces a complete test matrix covering happy paths, edge cases, and error scenarios.' },
-  { q: 'Can I edit the generated test cases?', a: 'Every generated case is fully editable. Modify steps, add new ones, delete cases, bulk-select and delete, or regenerate individual cases with updated context.' },
-  { q: 'What formats can I export?', a: 'Reports export as PDFs. Raw test data exports as JSON for integration. Pro and Enterprise plans include direct Jira and Linear sync.' },
-  { q: 'Is my data secure?', a: 'All data is encrypted at rest and in transit. Enterprise plans offer dedicated infrastructure, SSO/SAML, audit logging, and optional on-premise deployment.' },
-  { q: 'Can I try it before committing?', a: 'Yes. The Free plan gives you 25 test generations per month with no credit card required. Upgrade is instant and you can cancel anytime.' },
+  { q: 'How does Docket generate test cases from screenshots?', a: 'Docket uses vision AI to analyze UI screenshots — detecting buttons, inputs, modals, and error states. Combined with your PRD text, it produces a complete test matrix covering happy paths, edge cases, and error scenarios, with each case linked back to the requirement that motivated it.' },
+  { q: 'Can I edit the generated test cases?', a: 'Every generated case is fully editable. Modify steps, add new ones, delete cases, bulk-select and delete, duplicate, or reorder with drag-and-drop.' },
+  { q: 'What formats can I export?', a: 'Reports export as PDF (print-ready) and CSV; raw test data exports as JSON. The report itself is editable before you share it — reorder sections, add commentary, add a sign-off table.' },
+  { q: 'Is my data secure?', a: 'All traffic is encrypted in transit and data is encrypted at rest. Authentication, storage, and the database are handled by Supabase\'s SOC 2 compliant infrastructure. Screenshots and requirements are used only to generate your test cases.' },
+  { q: 'Can I try it before committing?', a: 'Yes — the Free plan starts with no credit card. Upgrade is instant and you can cancel anytime.' },
 ]
 
 function makeSlides(testimonials: typeof TESTIMONIALS) {
@@ -129,6 +148,210 @@ function RippleButton({ children, className = '', ...props }: React.ButtonHTMLAt
   )
 }
 
+/* ── Hero: the product in real use ─────────────────────────────────────
+   A miniature execution session that stamps cases pass/fail in a loop —
+   the product's signature interaction, running live in the hero. */
+
+function LiveHeroMockup() {
+  const reduceMotion = useReducedMotion()
+  const [step, setStep] = useState(reduceMotion ? 3 : 2)
+
+  useEffect(() => {
+    if (reduceMotion) return
+    const interval = setInterval(() => {
+      setStep((s) => (s >= HERO_CASES.length ? 2 : s + 1))
+    }, 1300)
+    return () => clearInterval(interval)
+  }, [reduceMotion])
+
+  const executed = Math.min(step, HERO_CASES.length)
+  const pct = Math.round((executed / HERO_CASES.length) * 100)
+  const fails = HERO_CASES.slice(0, executed).filter((c) => c.verdict === 'fail').length
+  const verdict = fails === 0 ? 'PASS' : fails <= 2 ? 'CONDITIONAL PASS' : 'FAIL'
+
+  return (
+    <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg shadow-floating overflow-hidden">
+      {/* Window chrome */}
+      <div className="flex items-center gap-1.5 px-4 py-3 border-b border-outline-variant/20 bg-surface-container-low">
+        <div className="w-2.5 h-2.5 rounded-full bg-[#ed6a5e]" />
+        <div className="w-2.5 h-2.5 rounded-full bg-[#f5bd4f]" />
+        <div className="w-2.5 h-2.5 rounded-full bg-[#61c454]" />
+        <span className="ml-2 font-mono text-[10px] text-on-surface-variant">sessions / login-flow / execute</span>
+      </div>
+
+      <div className="flex">
+        {/* Left rail */}
+        <div className="hidden sm:flex flex-col items-center gap-2 px-3 py-4 border-r border-outline-variant/20 bg-surface-container-low">
+          <div className="w-5 h-5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <Icon name="workspaces" size={12} className="text-primary" />
+          </div>
+          <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
+          <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
+          <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
+          <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
+        </div>
+
+        {/* Test case rows, stamped in sequence */}
+        <div className="flex-1 p-4 space-y-2">
+          {HERO_CASES.map((tc, i) => {
+            const stamped = i < executed
+            return (
+              <div
+                key={tc.title}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/20 transition-opacity duration-300"
+                style={{ opacity: stamped ? 1 : 0.5 }}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium text-on-surface truncate">{tc.title}</p>
+                  <p className="font-mono text-[9px] text-warning">{tc.ref}</p>
+                </div>
+                <div className="shrink-0">
+                  {stamped ? (
+                    <Stamp status={tc.verdict} visible />
+                  ) : (
+                    <span className="inline-block w-12 text-center font-mono text-[10px] text-on-surface-variant/40">○</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Progress + verdict */}
+          <div className="flex items-center gap-3 pt-1">
+            <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-warning rounded-full"
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 0.6, ease: 'easeOut' }}
+              />
+            </div>
+            <span className="font-mono text-[10px] text-on-surface-variant shrink-0">{executed}/{HERO_CASES.length} executed</span>
+            <span
+              className={`font-heading text-[10px] uppercase tracking-[0.1em] font-semibold border rounded px-2 py-0.5 shrink-0 transition-colors duration-300
+                ${fails === 0 ? 'border-primary text-primary' : 'border-warning text-warning'}`}
+            >
+              {verdict}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── The report showcase: deeper feature proof ───────────────────────── */
+
+function LogoMarquee() {
+  /* Infinite marquee. The track holds two copies of the logo list and
+     translates -50% (exactly one copy) for a seamless loop; hovering the
+     group pauses it. The animated track is aria-hidden — a static list is
+     exposed to screen readers instead, and reduced-motion users get the
+     static wall too (animation: none). */
+  const items = [...LOGO_WALL, ...LOGO_WALL]
+  return (
+    <div className="group relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+      <ul className="sr-only">
+        {LOGO_WALL.map((name) => (
+          <li key={name}>{name}</li>
+        ))}
+      </ul>
+      <div
+        className="logo-marquee-track flex items-center gap-x-12 md:gap-x-16 w-max mx-auto py-1 text-on-surface-variant/50 transition-colors duration-300 group-hover:text-on-surface-variant/80 group-hover:[animation-play-state:paused]"
+        aria-hidden="true"
+      >
+        {items.map((name, i) => (
+          <span
+            key={`${name}-${i}`}
+            className="font-heading text-[15px] font-semibold tracking-[0.08em] whitespace-nowrap select-none cursor-default"
+          >
+            {name}
+          </span>
+        ))}
+      </div>
+      <style>{`
+        @keyframes logo-marquee {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        /* Longhand props on purpose: the shorthand would reset
+           animation-play-state to 'running' and override Tailwind's
+           group-hover:[animation-play-state:paused] utility. */
+        .logo-marquee-track {
+          animation-name: logo-marquee;
+          animation-duration: 28s;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .logo-marquee-track { animation: none; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function ReportShowcase() {
+  return (
+    <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg shadow-floating overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-outline-variant/20 bg-surface-container-low">
+        <span className="font-mono text-[10px] text-on-surface-variant">REPORT · login-flow · v3</span>
+        <span className="font-heading text-[9px] uppercase tracking-[0.1em] font-semibold text-warning border border-warning/30 rounded px-1.5 py-0.5">Conditional pass</span>
+      </div>
+      <div className="p-5 md:p-6 grid grid-cols-1 md:grid-cols-5 gap-6">
+        {/* Summary */}
+        <div className="md:col-span-2 space-y-3">
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-heading text-[40px] leading-none text-primary font-semibold">96</span>
+            <span className="font-heading text-[16px] text-on-surface-variant font-semibold">%</span>
+          </div>
+          <p className="font-body-md text-[12px] text-on-surface-variant -mt-1">pass rate · 24 of 25 executed</p>
+          <div className="space-y-1.5 pt-1">
+            {[
+              { label: 'Pass', value: 22, color: 'bg-primary' },
+              { label: 'Fail / Blocked', value: 2, color: 'bg-warning' },
+              { label: 'Not run', value: 1, color: 'bg-surface-container-high' },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center gap-2">
+                <span className="w-24 font-mono text-[10px] text-on-surface-variant">{row.label}</span>
+                <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                  <div className={`h-full ${row.color} rounded-full`} style={{ width: `${(row.value / 25) * 100}%` }} />
+                </div>
+                <span className="w-5 text-right font-mono text-[10px] text-on-surface-variant">{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Coverage */}
+        <div className="md:col-span-3">
+          <p className="font-heading text-[10px] uppercase tracking-[0.1em] font-semibold text-on-surface-variant mb-3">Requirements coverage</p>
+          <div className="space-y-1.5">
+            {[
+              { ref: 'PRD §2.3', title: 'Password validation rules', done: true },
+              { ref: 'PRD §2.5', title: 'Remember-me persistence', done: true },
+              { ref: 'PRD §4.1', title: 'Reset link expiry', done: true },
+              { ref: 'PRD §3.2', title: 'OTP error handling', done: true },
+              { ref: 'PRD §5.1', title: 'Rate limiting on auth', done: false },
+            ].map((c) => (
+              <div key={c.ref} className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-surface-container-low border border-outline-variant/20">
+                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${c.done ? 'bg-primary/10 border-primary/30' : 'border-outline-variant/40'}`}>
+                  {c.done && (
+                    <svg className="w-2.5 h-2.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </span>
+                <span className="font-mono text-[10px] text-warning shrink-0">{c.ref}</span>
+                <span className="text-[12px] font-medium text-on-surface truncate">{c.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── Main ── */
 export function Marketing() {
   const { user } = useAuth()
@@ -153,7 +376,6 @@ export function Marketing() {
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[800px] rounded-full border border-outline-variant/10" />
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full border border-outline-variant/8" />
         <div className="absolute top-2/5 left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full border border-outline-variant/6" />
-        {/* Grid lines */}
         <svg className="absolute inset-0 w-full h-full opacity-[0.03]" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <pattern id="parallax-grid" patternUnits="userSpaceOnUse" width="80" height="80">
@@ -167,7 +389,9 @@ export function Marketing() {
       {/* ═══ Nav (PillNav) ═══ */}
       <PillNav
         links={[
+          { href: '#how', label: 'How it works' },
           { href: '#features', label: 'Features' },
+          { href: '#pricing', label: 'Pricing' },
           { href: '#faq', label: 'FAQ' },
         ]}
         logo={
@@ -227,33 +451,34 @@ export function Marketing() {
 
       <main className="relative z-10">
         {/* ═══ HERO ═══ */}
-        <section className="pt-24 pb-20 md:pt-28 md:pb-24 px-4 md:px-10 max-w-[1280px] mx-auto">
+        <section className="pt-20 pb-16 md:pt-24 md:pb-20 px-4 md:px-10 max-w-[1280px] mx-auto">
           <AnimatedContent direction="vertical" distance={32} duration={0.6} once="marketing-hero">
-            <div className="text-center max-w-3xl mx-auto mb-14">
+            <div className="text-center max-w-3xl mx-auto mb-12">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-primary/5 border border-outline-variant/30 font-heading text-[11px] uppercase tracking-[0.06em] font-semibold text-on-surface-variant mb-5">
                 <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 AI-Powered Test Generation
               </div>
-              <h1 className="font-heading text-[clamp(2rem,5vw,4rem)] leading-[1.1] tracking-[-0.02em] text-primary mb-4">
-                Tests from screens &amp; specs<br />
-                <span className="text-on-surface-variant">in one click.</span>
+              <h1 className="font-heading text-[clamp(2.25rem,5.5vw,4.5rem)] leading-[1.05] tracking-[-0.025em] text-primary mb-5">
+                A screen, its spec,
+                <br />
+                <span className="text-on-surface-variant">and the verdict — stamped.</span>
               </h1>
               <p className="font-body-md text-[15px] md:text-[16px] text-on-surface-variant max-w-2xl mx-auto leading-relaxed mb-8">
-                Drop a screenshot. Paste a PRD. Docket generates a complete, executable test matrix —&nbsp;
-                covering happy paths, edge cases, and error states — in seconds, not hours.
+                Drop a screenshot and paste the PRD. Docket drafts the full test matrix — happy paths,
+                edge cases, error states — and you execute, stamp, and ship the report.
               </p>
               <div className="flex items-center justify-center gap-3 flex-wrap">
                 <RippleButton
                   onClick={() => navigate('/sign-up')}
-                  className="bg-primary text-on-primary font-heading text-[13px] font-semibold px-7 py-3 rounded-lg shadow-lifted"
+                  className="bg-primary text-on-primary font-heading text-[13px] font-semibold px-7 py-3 rounded-lg shadow-lifted hover:opacity-90 active:scale-[0.97] transition-all"
                 >
                   Start Free — No Credit Card
                 </RippleButton>
                 <a
-                  href="#features"
+                  href="#how"
                   className="inline-flex items-center gap-1.5 font-body-md text-[13px] text-on-surface-variant hover:text-primary transition-colors px-5 py-3"
                 >
-                  See how it works
+                  See it in action
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                     <path d="m6 9 6 6 6-6" />
                   </svg>
@@ -263,57 +488,43 @@ export function Marketing() {
           </AnimatedContent>
 
           <AnimatedContent direction="vertical" distance={48} duration={0.8} delay={0.2} once="marketing-hero-mockup">
-            <TiltedCard rotateAmplitude={4} scaleOnHover={1.01} containerHeight="auto" className="max-w-4xl mx-auto">
-              <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg shadow-floating overflow-hidden">
-                <div className="flex items-center gap-1.5 px-4 py-3 border-b border-outline-variant/20 bg-surface-container-low">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#ed6a5e]" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#f5bd4f]" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#61c454]" />
-                  <span className="ml-2 font-mono text-[10px] text-on-surface-variant">docket generate --session login-flow</span>
-                </div>
-                <div className="flex">
-                  <div className="hidden sm:flex flex-col items-center gap-2 px-3 py-4 border-r border-outline-variant/20 bg-surface-container-low">
-                    <div className="w-5 h-5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 text-primary">
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                        <path d="M3 9h18M9 21V9" />
-                      </svg>
-                    </div>
-                    <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
-                    <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
-                    <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
-                    <div className="w-5 h-0.5 rounded bg-outline-variant/30" />
-                  </div>
-                  <div className="flex-1 p-4 space-y-2">
-                    {[
-                      'Verify login form renders all 4 fields',
-                      'Confirm error state on invalid email',
-                      'Validate password strength indicator',
-                    ].map((tc, i) => (
-                      <div
-                        key={tc}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/20"
-                      >
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${i < 2 ? 'bg-success/15 border-success/30' : 'border-outline-variant/40'}`}>
-                          {i < 2 && (
-                            <svg className="w-2.5 h-2.5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-[12px] font-medium text-on-surface truncate">{tc}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <TiltedCard rotateAmplitude={3} scaleOnHover={1.01} containerHeight="auto" className="max-w-3xl mx-auto">
+              <LiveHeroMockup />
             </TiltedCard>
           </AnimatedContent>
         </section>
 
+        {/* ═══ LOGO WALL ═══ */}
+        <section className="py-12 border-y border-outline-variant/20 bg-surface-container-low">
+          <div className="max-w-[1280px] mx-auto px-4 md:px-10">
+            <AnimatedContent distance={16} duration={0.5} once="marketing-logos">
+              <p className="font-body-md text-[11px] text-on-surface-variant text-center mb-6 uppercase tracking-[0.12em]">
+                Trusted by QA teams shipping faster
+              </p>
+              <LogoMarquee />
+            </AnimatedContent>
+          </div>
+        </section>
+
+        {/* ═══ METRICS ═══ */}
+        <section className="py-14 px-4 md:px-10 max-w-[1280px] mx-auto">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 stagger-enter">
+            {METRICS.map((m, i) => (
+              <StaggerItem key={m.label} index={i}>
+                <div className="text-center">
+                  <div className="font-heading text-[34px] md:text-[40px] text-primary font-semibold tracking-tight">
+                    <Counter from={0} to={m.value} duration={1.6} suffix={m.suffix} className="font-heading text-[34px] md:text-[40px] text-primary font-semibold tracking-tight" />
+                  </div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-on-surface-variant mt-1">{m.label}</p>
+                </div>
+              </StaggerItem>
+            ))}
+          </div>
+        </section>
+
         {/* ═══ HOW IT WORKS ═══ */}
         <AnimatedContent distance={0} duration={0.6} once="marketing-how-section">
-          <section className="py-16 border-y border-outline-variant/20 bg-surface-container-low">
+          <section id="how" className="py-16 border-y border-outline-variant/20 bg-surface-container-low">
             <div className="max-w-[1280px] mx-auto px-4 md:px-10">
               <AnimatedContent distance={20} duration={0.5} once="marketing-how-heading">
                 <h2 className="font-heading text-[22px] md:text-[26px] text-primary text-center mb-2">How it works</h2>
@@ -367,7 +578,7 @@ export function Marketing() {
                 <span className="inline-block font-heading text-[11px] uppercase tracking-[0.06em] font-semibold text-on-surface-variant mb-3">Capabilities</span>
                 <h2 className="font-heading text-[28px] md:text-[32px] text-primary mb-2">What Docket actually does</h2>
                 <p className="font-body-md text-[14px] text-on-surface-variant max-w-xl mx-auto">
-                  No fluff. No marketing speak. Here is exactly what happens when you use the tool.
+                  No fluff. This is exactly what happens when you use the tool.
                 </p>
               </div>
             </AnimatedContent>
@@ -377,9 +588,7 @@ export function Marketing() {
                 <StaggerItem key={f.id} index={i}>
                   <TiltedCard rotateAmplitude={2} scaleOnHover={1.01} containerHeight="100%" className="h-full">
                     <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-5 h-full card-interactive hover:shadow-lifted transition-all duration-200">
-                      {f.illustration && (
-                        <div className="mb-3">{f.illustration}</div>
-                      )}
+                      <div className="mb-3">{f.illustration}</div>
                       <h3 className="font-heading text-[14px] text-primary font-medium mb-1">
                         {f.title}
                       </h3>
@@ -394,12 +603,117 @@ export function Marketing() {
           </section>
         </AnimatedContent>
 
+        {/* ═══ THE REPORT (deeper proof) ═══ */}
+        <AnimatedContent distance={0} duration={0.6} once="marketing-report-section">
+          <section className="py-20 border-y border-outline-variant/20 bg-surface-container-low">
+            <div className="max-w-[1080px] mx-auto px-4 md:px-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-14 items-center mb-12">
+                <div>
+                  <span className="inline-block font-heading text-[11px] uppercase tracking-[0.06em] font-semibold text-warning mb-3">The handoff</span>
+                  <h2 className="font-heading text-[28px] md:text-[32px] text-primary mb-3 leading-tight">
+                    A report your team can actually read.
+                  </h2>
+                  <p className="font-body-md text-[14px] text-on-surface-variant leading-relaxed">
+                    Verdict stamp, pass-rate summary, failure distribution, requirement coverage,
+                    and a sign-off table — editable before you share, exportable as PDF.
+                    The evidence travels with the verdict.
+                  </p>
+                </div>
+                <AnimatedContent direction="vertical" distance={32} duration={0.7} once="marketing-report-visual">
+                  <ReportShowcase />
+                </AnimatedContent>
+              </div>
+            </div>
+          </section>
+        </AnimatedContent>
+
+        {/* ═══ PRICING ═══ */}
+        <AnimatedContent distance={0} duration={0.6} once="marketing-pricing-section">
+          <section id="pricing" className="py-20 px-4 md:px-10 max-w-[1080px] mx-auto">
+            <AnimatedContent distance={20} duration={0.5} once="marketing-pricing-heading">
+              <div className="text-center mb-12">
+                <span className="inline-block font-heading text-[11px] uppercase tracking-[0.06em] font-semibold text-on-surface-variant mb-3">Pricing</span>
+                <h2 className="font-heading text-[28px] md:text-[32px] text-primary mb-2">Start free. Upgrade when the room grows.</h2>
+                <p className="font-body-md text-[14px] text-on-surface-variant max-w-xl mx-auto">
+                  No feature-gated trial. The free plan is a real workspace, not a teaser.
+                </p>
+              </div>
+            </AnimatedContent>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger-enter">
+              {[
+                {
+                  name: 'Free',
+                  price: '$0',
+                  cadence: '/mo',
+                  blurb: 'For individual testers trying it on a real project.',
+                  features: ['25 generations / month', 'All input types', 'Unlimited sessions', 'PDF & CSV reports'],
+                  cta: 'Start Free',
+                  featured: false,
+                },
+                {
+                  name: 'Pro',
+                  price: '$19',
+                  cadence: '/mo',
+                  blurb: 'For small QA teams running steady releases.',
+                  features: ['Unlimited generations', 'Workspace roles & invitations', 'Issue Log & sign-off', 'Priority support'],
+                  cta: 'Start Pro',
+                  featured: true,
+                },
+                {
+                  name: 'Enterprise',
+                  price: 'Custom',
+                  cadence: '',
+                  blurb: 'For orgs that need control and accountability.',
+                  features: ['SSO / SAML', 'Audit logging', 'Dedicated support & SLAs', 'On-prem deployment'],
+                  cta: 'Contact Sales',
+                  featured: false,
+                },
+              ].map((plan, i) => (
+                <StaggerItem key={plan.name} index={i}>
+                  <div
+                    className={`relative flex flex-col h-full bg-surface-container-lowest border rounded-lg p-6 card-interactive hover:shadow-lifted transition-all duration-200
+                      ${plan.featured ? 'border-warning/50 shadow-lifted' : 'border-outline-variant/30'}`}
+                  >
+                    {plan.featured && (
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-warning text-white font-heading text-[9px] uppercase tracking-[0.1em] font-semibold px-2.5 py-0.5 rounded">
+                        Most popular
+                      </span>
+                    )}
+                    <h3 className="font-heading text-[14px] text-primary font-semibold">{plan.name}</h3>
+                    <div className="flex items-baseline gap-1 mt-2 mb-1">
+                      <span className="font-heading text-[32px] text-primary font-semibold tracking-tight">{plan.price}</span>
+                      {plan.cadence && <span className="font-body-md text-[12px] text-on-surface-variant">{plan.cadence}</span>}
+                    </div>
+                    <p className="font-body-md text-[12px] text-on-surface-variant mb-5">{plan.blurb}</p>
+                    <ul className="space-y-2 mb-6">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-center gap-2 font-body-md text-[12.5px] text-on-surface">
+                          <Icon name="check-circle" size={14} className="text-success shrink-0" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <RippleButton
+                      onClick={() => navigate('/sign-up')}
+                      className={`mt-auto w-full font-heading text-[11px] uppercase tracking-[0.06em] font-semibold py-2.5 rounded-lg transition-all active:scale-[0.97]
+                        ${plan.featured ? 'bg-warning text-white hover:opacity-90' : 'bg-primary text-on-primary hover:opacity-90'}`}
+                    >
+                      {plan.cta}
+                    </RippleButton>
+                  </div>
+                </StaggerItem>
+              ))}
+            </div>
+          </section>
+        </AnimatedContent>
+
         {/* ═══ TESTIMONIALS ═══ */}
         <AnimatedContent distance={0} duration={0.6} once="marketing-testimonials-section">
           <section className="py-20 bg-surface-container-low border-y border-outline-variant/20">
             <div className="max-w-[640px] mx-auto px-4 md:px-10 text-center">
               <AnimatedContent distance={20} duration={0.5} once="marketing-testimonials-label">
-                <span className="inline-block font-heading text-[11px] uppercase tracking-[0.06em] font-semibold text-on-surface-variant mb-6">Testimonials</span>
+                <span className="inline-block font-heading text-[11px] uppercase tracking-[0.06em] font-semibold text-on-surface-variant mb-6">What teams say</span>
               </AnimatedContent>
               <Carousel
                 slides={testimonialSlides}
@@ -430,11 +744,11 @@ export function Marketing() {
               <GlassSurface backgroundEffect={0.2} className="relative z-10">
                 <div className="p-8 md:p-10 text-center">
                   <h2 className="font-heading text-[26px] md:text-[30px] text-primary mb-6 leading-tight">
-                    A screen. Its requirements. One click.
+                    Your next release deserves a stamped verdict.
                   </h2>
                   <RippleButton
                     onClick={() => navigate('/sign-up')}
-                    className="bg-primary text-on-primary font-heading text-[13px] font-semibold px-7 py-3 rounded-lg shadow-lifted"
+                    className="bg-primary text-on-primary font-heading text-[13px] font-semibold px-7 py-3 rounded-lg shadow-lifted hover:opacity-90 active:scale-[0.97] transition-all"
                   >
                     Start Free — No Credit Card
                   </RippleButton>
@@ -453,7 +767,11 @@ export function Marketing() {
               </div>
               <span className="font-heading text-[16px] text-primary font-semibold tracking-tight">Docket</span>
             </div>
-            <a href="#features" className="font-body-md text-[12px] text-on-surface-variant hover:text-primary transition-colors">Features</a>
+            <div className="flex items-center gap-5">
+              <a href="#features" className="font-body-md text-[12px] text-on-surface-variant hover:text-primary transition-colors">Features</a>
+              <a href="#pricing" className="font-body-md text-[12px] text-on-surface-variant hover:text-primary transition-colors">Pricing</a>
+              <Link to="/sign-in" className="font-body-md text-[12px] text-on-surface-variant hover:text-primary transition-colors">Sign in</Link>
+            </div>
             <p className="font-body-md text-[11px] text-on-surface-variant">&copy; {new Date().getFullYear()} Docket.</p>
           </div>
         </footer>

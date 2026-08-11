@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isFailed } from '@/lib/status'
 import type { Session, TestCase } from '@/types/database'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
 
@@ -20,7 +21,7 @@ const statusDotColors: Record<string, string> = {
 export function LeftRail({ session, testCases, activeId, onSelect }: Props) {
   const [showInputs, setShowInputs] = useState(true)
   const passCount = testCases?.filter((tc) => tc.status === 'pass').length ?? 0
-  const failCount = testCases?.filter((tc) => tc.status === 'fail' || tc.status === 'blocked').length ?? 0
+  const failCount = testCases?.filter((tc) => isFailed(tc.status)).length ?? 0
   const notRunCount = testCases?.filter((tc) => tc.status === 'not_run').length ?? 0
 
   return (

@@ -1,14 +1,30 @@
 interface Props {
-  status: 'pass' | 'fail' | 'blocked'
+  status: 'pass' | 'fail' | 'blocked' | 'not_applicable' | 'fixed' | 'reopened' | 'controlled_live' | 'uat' | 'not_run'
   visible: boolean
 }
 
 export function Stamp({ status, visible }: Props) {
   if (!visible) return null
 
-  const isFail = status === 'fail' || status === 'blocked'
-  const glyph = status === 'blocked' ? '\u2298' : '\u2713'
-  const label = status === 'blocked' ? 'BLOCKED' : status === 'fail' ? 'FAIL' : 'PASS'
+  const isFail = status === 'fail' || status === 'blocked' || status === 'reopened'
+  const glyph = status === 'pass' ? '\u2713'
+    : status === 'fail' ? '\u2691'
+    : status === 'blocked' ? '\u2298'
+    : status === 'fixed' ? '\u270E'
+    : status === 'reopened' ? '\u21BA'
+    : status === 'controlled_live' ? '\u25C9'
+    : status === 'uat' ? '\u2302'
+    : status === 'not_applicable' ? '\u2300'
+    : '\u25CB'
+  const label = status === 'blocked' ? 'BLOCKED'
+    : status === 'fail' ? 'FAIL'
+    : status === 'pass' ? 'PASS'
+    : status === 'fixed' ? 'FIXED'
+    : status === 'reopened' ? 'REOPENED'
+    : status === 'controlled_live' ? 'CONTROLLED LIVE'
+    : status === 'uat' ? 'UAT'
+    : status === 'not_applicable' ? 'N/A'
+    : 'UNTESTED'
 
   return (
     <div

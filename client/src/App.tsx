@@ -18,6 +18,7 @@ import { ProjectSetup } from '@/pages/ProjectSetup'
 import { AssignProjects } from '@/pages/AssignProjects'
 import { MyProjects } from '@/pages/MyProjects'
 import { ProjectDetail } from '@/pages/ProjectDetail'
+import { IssueLog } from '@/pages/IssueLog'
 import { Settings } from '@/pages/Settings'
 import { NotFound } from '@/pages/NotFound'
 
@@ -147,6 +148,7 @@ const router = createBrowserRouter([
           { path: '/projects/assign', element: <AssignProjects />, errorElement: <RouteErrorBoundary /> },
           { path: '/projects/my', element: <MyProjects />, errorElement: <RouteErrorBoundary /> },
           { path: '/projects/:id', element: <ProjectDetail />, errorElement: <RouteErrorBoundary /> },
+          { path: '/projects/:id/issue-log', element: <IssueLog />, errorElement: <RouteErrorBoundary /> },
           { path: '/settings', element: <Settings />, errorElement: <RouteErrorBoundary /> },
         ],
       },

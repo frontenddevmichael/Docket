@@ -51,6 +51,8 @@ export type Database = {
       }
       execution_evidence: {
         Row: {
+          actual_result: string | null
+          environment: string | null
           executed_at: string
           executed_by: string
           id: string
@@ -60,6 +62,8 @@ export type Database = {
           test_case_id: string
         }
         Insert: {
+          actual_result?: string | null
+          environment?: string | null
           executed_at?: string
           executed_by: string
           id?: string
@@ -69,6 +73,8 @@ export type Database = {
           test_case_id: string
         }
         Update: {
+          actual_result?: string | null
+          environment?: string | null
           executed_at?: string
           executed_by?: string
           id?: string
@@ -90,6 +96,226 @@ export type Database = {
             columns: ["test_case_id"]
             isOneToOne: false
             referencedRelation: "test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blockers: {
+        Row: {
+          created_at: string
+          created_by: string
+          details: string | null
+          id: string
+          project_id: string | null
+          resolved_at: string | null
+          session_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          details?: string | null
+          id?: string
+          project_id?: string | null
+          resolved_at?: string | null
+          session_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          details?: string | null
+          id?: string
+          project_id?: string | null
+          resolved_at?: string | null
+          session_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blockers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blockers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blockers_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issues: {
+        Row: {
+          assigned_developer: string | null
+          closed_at: string | null
+          created_at: string
+          created_by: string
+          details: string | null
+          duration_of_impact: string | null
+          id: string
+          opened_at: string
+          owner: string | null
+          priority: string | null
+          project_id: string | null
+          session_id: string | null
+          severity: string | null
+          status: string
+          test_case_id: string | null
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          assigned_developer?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by: string
+          details?: string | null
+          duration_of_impact?: string | null
+          id?: string
+          opened_at?: string
+          owner?: string | null
+          priority?: string | null
+          project_id?: string | null
+          session_id?: string | null
+          severity?: string | null
+          status?: string
+          test_case_id?: string | null
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          assigned_developer?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          details?: string | null
+          duration_of_impact?: string | null
+          id?: string
+          opened_at?: string
+          owner?: string | null
+          priority?: string | null
+          project_id?: string | null
+          session_id?: string | null
+          severity?: string | null
+          status?: string
+          test_case_id?: string | null
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issues_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issues_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issues_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "test_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issues_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      observations: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string
+          developer_comment: string | null
+          id: string
+          pm_comment: string | null
+          project_id: string | null
+          session_id: string | null
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by: string
+          developer_comment?: string | null
+          id?: string
+          pm_comment?: string | null
+          project_id?: string | null
+          session_id?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string
+          developer_comment?: string | null
+          id?: string
+          pm_comment?: string | null
+          project_id?: string | null
+          session_id?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "observations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observations_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -284,6 +510,7 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
+          project_id: string | null
           requirements_text: string
           screenshot_path: string | null
           screenshot_url: string | null
@@ -297,6 +524,7 @@ export type Database = {
           created_at?: string
           created_by: string
           id?: string
+          project_id?: string | null
           requirements_text: string
           screenshot_path?: string | null
           screenshot_url?: string | null
@@ -310,6 +538,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           id?: string
+          project_id?: string | null
           requirements_text?: string
           screenshot_path?: string | null
           screenshot_url?: string | null
@@ -330,49 +559,79 @@ export type Database = {
       }
       test_cases: {
         Row: {
+          assigned_developer: string | null
           created_at: string
           created_by: string
+          executed_at: string | null
           expected_result: string
           feedback: string | null
           id: string
+          module: string | null
           preconditions: string | null
+          priority: string | null
           session_id: string
+          severity: string | null
           sort_order: number
           source_ref: string | null
           status: string
           steps: Json
+          submodule: string | null
+          test_class: string | null
+          test_data: Json | null
+          test_environment: string | null
+          test_objective: string | null
           title: string
           updated_at: string
           workspace_id: string
         }
         Insert: {
+          assigned_developer?: string | null
           created_at?: string
           created_by: string
+          executed_at?: string | null
           expected_result: string
           feedback?: string | null
           id?: string
+          module?: string | null
           preconditions?: string | null
+          priority?: string | null
           session_id: string
+          severity?: string | null
           sort_order?: number
           source_ref?: string | null
           status?: string
           steps?: Json
+          submodule?: string | null
+          test_class?: string | null
+          test_data?: Json | null
+          test_environment?: string | null
+          test_objective?: string | null
           title: string
           updated_at?: string
           workspace_id: string
         }
         Update: {
+          assigned_developer?: string | null
           created_at?: string
           created_by?: string
+          executed_at?: string | null
           expected_result?: string
           feedback?: string | null
           id?: string
+          module?: string | null
           preconditions?: string | null
+          priority?: string | null
           session_id?: string
+          severity?: string | null
           sort_order?: number
           source_ref?: string | null
           status?: string
           steps?: Json
+          submodule?: string | null
+          test_class?: string | null
+          test_data?: Json | null
+          test_environment?: string | null
+          test_objective?: string | null
           title?: string
           updated_at?: string
           workspace_id?: string
@@ -647,6 +906,18 @@ export interface Session extends Tables<'sessions'> {}
 export interface SessionInput extends Tables<'session_inputs'> {}
 export interface TestCase extends Tables<'test_cases'> {}
 export interface ExecutionEvidence extends Tables<'execution_evidence'> {}
+export interface Issue extends Tables<'issues'> {
+  assigned_developer_profile?: { id: string; email: string; full_name: string | null } | null
+  owner_profile?: { id: string; email: string; full_name: string | null } | null
+  created_by_profile?: { id: string; email: string; full_name: string | null } | null
+  test_case?: { id: string; title: string; source_ref: string | null; status: string } | null
+}
+export interface Blocker extends Tables<'blockers'> {
+  created_by_profile?: { id: string; email: string; full_name: string | null } | null
+}
+export interface Observation extends Tables<'observations'> {
+  created_by_profile?: { id: string; email: string; full_name: string | null } | null
+}
 export interface Report extends Tables<'reports'> {}
 export interface ActivityLog extends Tables<'activity_log'> {
   profiles?: { email: string; full_name: string | null } | null

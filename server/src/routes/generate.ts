@@ -15,6 +15,13 @@ const testCaseSchema = z.object({
   steps: z.array(z.string()),
   expected_result: z.string(),
   source_ref: z.string().nullable(),
+  module: z.string().nullable(),
+  submodule: z.string().nullable(),
+  test_objective: z.string().nullable(),
+  test_class: z.string().nullable(),
+  test_data: z.string().nullable(),
+  severity: z.enum(['critical', 'high', 'medium', 'low']),
+  priority: z.enum(['high', 'medium', 'low']),
 })
 
 const generationSchema = z.object({
@@ -113,6 +120,14 @@ For each test case you produce, you must:
 2. Reference the requirement that motivated it in the source_ref field
 3. Write clear, actionable steps
 4. Cover: expected behavior flows, unexpected/incorrect input, edge cases, and error states
+5. Classify each case:
+   - module: the feature area or screen this case exercises (e.g. "Login", "Payments", "Checkout")
+   - submodule: a narrower slice within the module, or null
+   - test_objective: one short sentence on the behavior being verified
+   - test_class: one of "functional", "negative", "edge_case", "integration", "performance", "usability", "regression"
+   - test_data: concrete input data used by the steps, or null
+   - severity: impact if it breaks — one of "critical", "high", "medium", "low"
+   - priority: how urgent it is to fix — one of "high", "medium", "low"
 
 Be specific. Respond with valid JSON matching this exact schema:
 {
@@ -122,7 +137,14 @@ Be specific. Respond with valid JSON matching this exact schema:
       "preconditions": "string or null",
       "steps": ["string - Step 1", "string - Step 2"],
       "expected_result": "string - 1-2 sentences",
-      "source_ref": "string or null"
+      "source_ref": "string or null",
+      "module": "string or null",
+      "submodule": "string or null",
+      "test_objective": "string or null",
+      "test_class": "string or null",
+      "test_data": "string or null",
+      "severity": "critical | high | medium | low",
+      "priority": "high | medium | low"
     }
   ]
 }`
@@ -216,6 +238,13 @@ Be specific. Respond with valid JSON matching this exact schema:
       steps: JSON.stringify(tc.steps),
       expected_result: tc.expected_result,
       source_ref: tc.source_ref,
+      module: tc.module,
+      submodule: tc.submodule,
+      test_objective: tc.test_objective,
+      test_class: tc.test_class,
+      test_data: tc.test_data ? { values: tc.test_data } : null,
+      severity: tc.severity,
+      priority: tc.priority,
       sort_order: index,
       status: 'not_run',
       created_by: session.created_by,

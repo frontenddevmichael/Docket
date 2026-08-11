@@ -30,6 +30,7 @@ for (const [key, value] of Object.entries(loadEnv(path.resolve(_dirname, '../../
   if (!process.env[key]) process.env[key] = value
 }
 
+import { verifyServiceRoleKey, serviceRoleStatus } from './lib/supabase-admin.js'
 import screenshotRouter from './routes/screenshot.js'
 import generateRouter from './routes/generate.js'
 import trackingRouter from './routes/tracking.js'
@@ -41,6 +42,7 @@ import apiSpecRouter from './routes/api-spec.js'
 import sourceCodeRouter from './routes/source-code.js'
 import workspaceRouter from './routes/workspace.js'
 import projectsRouter from './routes/projects.js'
+import issueLogRouter from './routes/issue-log.js'
 import accountRouter from './routes/account.js'
 
 const app = express()
@@ -99,6 +101,9 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     openRouterConfigured: !!process.env.OPENROUTER_API_KEY,
+    // false when the service-role key is missing/invalid — every admin
+    // route would then return 500. The uptime check can key off this.
+    serviceRoleOk: serviceRoleStatus().ok,
   })
 })
 
@@ -112,6 +117,21 @@ app.use('/api', rateLimit({
   },
 }))
 
+// ── Production: serve the built client from the same process ──
+// In production the SPA is built into ../../client/dist (relative to dist/
+// when compiled, or src/ when run via tsx). Serving it from Express keeps
+// deployment to a single container and avoids CORS entirely — the client
+// calls Supabase directly and this API via same-origin /api paths.
+const clientDist = path.resolve(_dirname, '../../client/dist')
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist))
+  app.get('*', (req, res, next) => {
+    // API paths keep their own handlers; anything else falls back to the SPA.
+    if (req.path.startsWith('/api')) return next()
+    res.sendFile(path.join(clientDist, 'index.html'))
+  })
+}
+
 app.use('/api', screenshotRouter)
 app.use('/api', generateRouter)
 app.use('/api', trackingRouter)
@@ -123,7 +143,28 @@ app.use('/api', apiSpecRouter)
 app.use('/api', sourceCodeRouter)
 app.use('/api', workspaceRouter)
 app.use('/api', projectsRouter)
+app.use('/api', issueLogRouter)
 app.use('/api', accountRouter)
+
+// Final error handler — sync throws from any route land here instead of
+// crashing the process. Returns a generic message (no internals leaked).
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' })
+})
+app.use('/api', (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[api] unhandled error:', err)
+  res.status(500).json({ error: 'Internal server error' })
+})
+
+// Keep the process alive and observably unhealthy rather than dying silently
+// on a stray async failure. Logging the error is enough for the uptime/health
+// check to be useful, and the process-level guard prevents total downtime.
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] unhandledRejection:', reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[process] uncaughtException:', err)
+})
 
 const logPath = path.resolve(_dirname, '../server.log')
 let logStream: fs.WriteStream | null = null
@@ -145,6 +186,21 @@ function log(msg: string) {
   }
 }
 
+// Boot-time credential check: an invalid service-role key silently 500s every
+// admin-backed route. In production refuse to boot so the deploy fails fast;
+// in dev log loudly (the /api/health serviceRoleOk flag stays visible either way).
+// SUPABASE_SKIP_KEY_CHECK=1 bypasses the gate for emergency ops while rotating keys.
+const { ok: serviceRoleOk, detail: serviceRoleDetail } = await verifyServiceRoleKey()
+if (!serviceRoleOk && process.env.SUPABASE_SKIP_KEY_CHECK !== '1') {
+  console.error('WARNING: Supabase service-role key check FAILED — admin routes (/api/projects, /api/issue-log, /api/generate, /api/account, workspace admin ops) will return 500.')
+  console.error(`  detail: ${serviceRoleDetail}`)
+  console.error('  Fix: Supabase Dashboard → Settings → API keys → rotate service_role, then update .env.local (and the host env).')
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: refusing to boot in production with an invalid service-role key.')
+    process.exit(1)
+  }
+}
+
 app.listen(PORT, () => {
-  log(`Docket server running on http://localhost:${PORT}`)
+  log(`Docket server running on http://localhost:${PORT} (serviceRoleOk=${serviceRoleOk})`)
 })

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Report, TestCase, ExecutionEvidence } from '@/types/database'
+import { isExecuted, isFailed } from '@/lib/status'
+import type { Report, TestCase, ExecutionEvidence, Json } from '@/types/database'
 
 async function fetchReports(sessionId: string): Promise<Report[]> {
   const { data, error } = await supabase
@@ -87,9 +88,9 @@ export function useGenerateReport(sessionId: string) {
       existingCommentary?: string
     }) => {
       const pass = testCases.filter((tc) => tc.status === 'pass').length
-      const fail = testCases.filter((tc) => tc.status === 'fail').length
+      const fail = testCases.filter((tc) => isFailed(tc.status)).length
       const blocked = testCases.filter((tc) => tc.status === 'blocked').length
-      const notRun = testCases.filter((tc) => tc.status === 'not_run').length
+      const notRun = testCases.filter((tc) => !isExecuted(tc.status)).length
       const total = testCases.length
       const passRate = total > 0 ? Math.round((pass / total) * 100) : 0
 
@@ -102,7 +103,7 @@ export function useGenerateReport(sessionId: string) {
             const ref = tc.source_ref ?? 'unknown'
             if (!acc[ref]) acc[ref] = { total: 0, executed: 0, passed: 0 }
             acc[ref].total++
-            if (tc.status !== 'not_run') acc[ref].executed++
+            if (isExecuted(tc.status)) acc[ref].executed++
             if (tc.status === 'pass') acc[ref].passed++
             return acc
           },
@@ -110,7 +111,7 @@ export function useGenerateReport(sessionId: string) {
         )
 
       const failedCases = testCases
-        .filter((tc) => tc.status === 'fail' || tc.status === 'blocked')
+        .filter((tc) => isFailed(tc.status))
         .map((tc) => ({
           id: tc.id,
           title: tc.title,
@@ -127,7 +128,7 @@ export function useGenerateReport(sessionId: string) {
           })) ?? [],
         }))
 
-      const notRunCases = testCases.filter((tc) => tc.status === 'not_run')
+      const notRunCases = testCases.filter((tc) => !isExecuted(tc.status))
 
       const evidenceTimeline = (evidenceList ?? [])
         .filter((e) => e.executed_at)
@@ -149,11 +150,18 @@ export function useGenerateReport(sessionId: string) {
         failedCases,
         notRunCases: notRunCases.map((tc) => ({ id: tc.id, title: tc.title, source_ref: tc.source_ref })),
         evidenceTimeline,
+        observations: [],
+        signOff: [],
         allTestCases: testCases.map((tc) => ({
           id: tc.id,
           title: tc.title,
           status: tc.status,
           source_ref: tc.source_ref,
+          module: tc.module,
+          submodule: tc.submodule,
+          severity: tc.severity,
+          priority: tc.priority,
+          test_class: tc.test_class,
           steps: tc.steps,
           expected_result: tc.expected_result,
         })),
@@ -202,7 +210,17 @@ export function useUpdateReportCommentary(sessionId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ commentary, sectionCommentary }: { commentary?: string; sectionCommentary?: SectionCommentary }) => {
+    mutationFn: async ({
+      commentary,
+      sectionCommentary,
+      observations,
+      signOff,
+    }: {
+      commentary?: string
+      sectionCommentary?: SectionCommentary
+      observations?: ReportObservation[]
+      signOff?: ReportSignOff[]
+    }) => {
       const { data: reports } = await supabase
         .from('reports')
         .select('*')
@@ -219,6 +237,8 @@ export function useUpdateReportCommentary(sessionId: string) {
         ...(report.content as Record<string, unknown>),
         ...(commentary !== undefined ? { commentary } : {}),
         ...(sectionCommentary !== undefined ? { sectionCommentary } : {}),
+        ...(observations !== undefined ? { observations: observations as unknown as Json } : {}),
+        ...(signOff !== undefined ? { signOff: signOff as unknown as Json } : {}),
       }
 
       const { error } = await supabase
@@ -232,6 +252,24 @@ export function useUpdateReportCommentary(sessionId: string) {
       queryClient.invalidateQueries({ queryKey: ['reports', sessionId] })
     },
   })
+}
+
+export interface ReportObservation {
+  id: string
+  content: string
+  developer: string
+  pm: string
+  status: 'open' | 'acknowledged' | 'closed'
+}
+
+export interface ReportSignOff {
+  id: string
+  unit: string
+  name: string
+  signature: string
+  date: string
+  concurrence: string
+  reason: string
 }
 
 export type { SectionCommentary }

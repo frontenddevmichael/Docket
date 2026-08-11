@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 import { supabase } from '@/lib/supabase'
+import { isExecuted, isFailed, statusLabel } from '@/lib/status'
 import { useTestCases } from '@/hooks/useTestCases'
 import { useReports, useGenerateReport, useUpdateReportCommentary } from '@/hooks/useReport'
-import type { SectionCommentary } from '@/hooks/useReport'
+import type { SectionCommentary, ReportObservation, ReportSignOff } from '@/hooks/useReport'
 import { useToast } from '@/components/Toast'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { Icon } from '@/components/Icon'
@@ -191,6 +190,23 @@ export function SessionReport() {
     },
     enabled: !!sessionId,
   })
+  // Resolve executor ids to names/emails for the timeline
+  const { data: executors } = useQuery({
+    queryKey: ['evidence-executors'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+      if (error) throw error
+      return data as { id: string; email: string; full_name: string | null }[]
+    },
+    enabled: !!evidenceList && evidenceList.length > 0,
+  })
+  const executorName = (id?: string | null): string => {
+    if (!id) return ''
+    const p = executors?.find((x) => x.id === id)
+    return p?.full_name || p?.email || id.slice(0, 8)
+  }
   const generateReport = useGenerateReport(sessionId ?? '')
   const updateCommentary = useUpdateReportCommentary(sessionId ?? '')
   const { toast } = useToast()
@@ -200,6 +216,8 @@ export function SessionReport() {
   const [commentary, setCommentary] = useState('')
   const commentaryLoaded = useRef(false)
   const [expandedEvidence, setExpandedEvidence] = useState<string | null>(null)
+  const [observations, setObservations] = useState<ReportObservation[]>([])
+  const [signOffs, setSignOffs] = useState<ReportSignOff[]>([])
   const [visibleSections, setVisibleSections] = useState<Record<string, boolean>>({
     summary: true,
     quality: true,
@@ -208,6 +226,10 @@ export function SessionReport() {
     notRun: true,
     timeline: true,
     commentary: true,
+    distribution: true,
+    blockers: true,
+    observations: false,
+    signOff: true,
     allCases: true,
   })
 
@@ -218,6 +240,11 @@ export function SessionReport() {
     if (!reportRef.current) return
     setExportingPdf(true)
     try {
+      // Loaded on demand so jspdf + html2canvas (~300 KB) stay out of the main bundle
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
@@ -259,6 +286,8 @@ export function SessionReport() {
       commentaryLoaded.current = true
       const saved = (reports[0].content as Record<string, unknown>)?.commentary as string ?? ''
       setCommentary(saved)
+      setObservations(((reports[0].content as Record<string, unknown>)?.observations as ReportObservation[]) ?? [])
+      setSignOffs(((reports[0].content as Record<string, unknown>)?.signOff as ReportSignOff[]) ?? [])
     }
   }, [reports])
 
@@ -282,11 +311,12 @@ export function SessionReport() {
   }
 
   const pass = testCases?.filter((tc) => tc.status === 'pass').length ?? 0
-  const fail = testCases?.filter((tc) => tc.status === 'fail').length ?? 0
+  const fail = testCases?.filter((tc) => isFailed(tc.status)).length ?? 0
   const blocked = testCases?.filter((tc) => tc.status === 'blocked').length ?? 0
-  const notRun = testCases?.filter((tc) => tc.status === 'not_run').length ?? 0
+  const notRun = testCases?.filter((tc) => !isExecuted(tc.status)).length ?? 0
   const total = testCases?.length ?? 0
   const passRate = total > 0 ? Math.round((pass / total) * 100) : 0
+  const failedCases = testCases?.filter((tc) => isFailed(tc.status)) ?? []
 
   const handleSaveSectionCommentary = (section: keyof SectionCommentary) => async (val: string) => {
     if (!sectionCommentary) return
@@ -297,6 +327,93 @@ export function SessionReport() {
       onError: () => toast('Failed to save', 'error'),
     })
   }
+
+  const commitObservations = (next: ReportObservation[]) => {
+    setObservations(next)
+    updateCommentary.mutate({ observations: next }, {
+      onSuccess: () => toast('Observation saved', 'success'),
+      onError: () => toast('Failed to save', 'error'),
+    })
+  }
+
+  const commitSignOffs = (next: ReportSignOff[]) => {
+    setSignOffs(next)
+    updateCommentary.mutate({ signOff: next }, {
+      onSuccess: () => toast('Sign-off saved', 'success'),
+      onError: () => toast('Failed to save', 'error'),
+    })
+  }
+
+  const handleAddObservation = () => {
+    commitObservations([...observations, {
+      id: crypto.randomUUID(),
+      content: '',
+      developer: '',
+      pm: '',
+      status: 'open',
+    }])
+  }
+
+  const handleObservationChange = (id: string, field: keyof ReportObservation, value: string) => {
+    const next = observations.map((o) => (o.id === id ? { ...o, [field]: value } : o))
+    setObservations(next)
+  }
+
+  const handleAddSignOff = () => {
+    commitSignOffs([...signOffs, {
+      id: crypto.randomUUID(),
+      unit: '',
+      name: '',
+      signature: '',
+      date: new Date().toISOString().slice(0, 10),
+      concurrence: 'Concur',
+      reason: '',
+    }])
+  }
+
+  const handleSignOffChange = (id: string, field: keyof ReportSignOff, value: string) => {
+    const next = signOffs.map((s) => (s.id === id ? { ...s, [field]: value } : s))
+    setSignOffs(next)
+  }
+
+  const handleShare = async () => {
+    const url = window.location.href
+    const shareData = {
+      title: session?.title ?? 'Docket Test Report',
+      text: `${total} test case${total === 1 ? '' : 's'} · ${passRate}% pass rate — ${session?.title ?? 'Test Report'}`,
+      url,
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(url)
+        toast('Report link copied', 'success')
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(url)
+        toast('Report link copied', 'success')
+      } catch {
+        toast('Could not share report', 'error')
+      }
+    }
+  }
+
+  const distribution = (() => {
+    const sev: Record<string, number> = {}
+    const pri: Record<string, number> = {}
+    for (const fc of failedCases) {
+      const s = fc.severity ?? 'medium'
+      sev[s] = (sev[s] ?? 0) + 1
+      const p = fc.priority ?? 'medium'
+      pri[p] = (pri[p] ?? 0) + 1
+    }
+    return {
+      severity: (['critical', 'high', 'medium', 'low'] as const).map((k) => ({ label: k, value: sev[k] ?? 0 })),
+      priority: (['high', 'medium', 'low'] as const).map((k) => ({ label: k, value: pri[k] ?? 0 })),
+    }
+  })()
 
   if (isLoading) {
     return (
@@ -366,6 +483,15 @@ export function SessionReport() {
             </p>
           </div>
           <div className="flex items-center gap-2 md:gap-3 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={handleShare}
+              className="bg-[#FFFFFF] border border-[#DEDEDA] text-[#1C1C1A] py-2 px-3 md:px-4 rounded-lg font-heading text-[11px] uppercase tracking-[0.05em] font-semibold hover:bg-[#EEEEEC] transition-colors flex items-center gap-2 shadow-rest active:scale-[0.97]"
+            >
+              <Icon name="share" size={16} className="text-[#5C5C56]" />
+              <span className="hidden sm:inline">Share</span>
+              <span className="sm:hidden">Share</span>
+            </button>
             <button
               type="button"
               onClick={handleExportPdf}
@@ -692,7 +818,7 @@ export function SessionReport() {
         )}
 
         {/* Critical Failures with AI commentary */}
-        {testCases && testCases.filter((tc) => tc.status === 'fail' || tc.status === 'blocked').length > 0 && visibleSections.failed && (
+        {testCases && testCases.filter((tc) => isFailed(tc.status)).length > 0 && visibleSections.failed && (
           <div className="mb-8 md:mb-12">
             <div className="flex items-center justify-between mb-4 md:mb-6 pb-2 border-b border-[#DEDEDA]">
               <h2 className="font-heading text-[24px] text-[#1C1C1A] font-semibold flex items-center gap-2 flex-wrap">
@@ -720,7 +846,7 @@ export function SessionReport() {
             )}
             <div className="space-y-4 md:space-y-6">
               {testCases
-                .filter((tc) => tc.status === 'fail' || tc.status === 'blocked')
+                .filter((tc) => isFailed(tc.status))
                 .map((tc) => {
                   const evidence = evidenceList?.filter((e) => e.test_case_id === tc.id)
                   const steps = Array.isArray(tc.steps) ? tc.steps : []
@@ -730,7 +856,7 @@ export function SessionReport() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 md:gap-3 mb-2 flex-wrap">
                             <span className="font-mono text-[13px] text-[#1C1C1A] font-medium">TC-{tc.id.slice(0, 4)}</span>
-                            <span className="bg-[#EEEEEC] px-2 py-1 rounded-md font-heading text-[10px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold">{tc.status === 'fail' ? 'Failed' : 'Blocked'}</span>
+                            <span className="bg-[#EEEEEC] px-2 py-1 rounded-md font-heading text-[10px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold">{tc.status === 'fail' ? 'Failed' : tc.status === 'reopened' ? 'Reopened' : 'Blocked'}</span>
                             {tc.source_ref && (
                               <span className="bg-[#EEEEEC] px-2 py-1 rounded-md font-heading text-[10px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold">{tc.source_ref}</span>
                             )}
@@ -738,7 +864,7 @@ export function SessionReport() {
                           <h3 className="font-body-lg text-body-lg font-semibold text-[#1C1C1A] mb-4 md:pr-20">{tc.title}</h3>
                           <div className="bg-[#EEEEEC] border border-[#DEDEDA] p-3 md:p-4 rounded-lg font-mono text-[11px] text-[#5C5C56] mb-4 overflow-x-auto">
                             <p className="text-[#C77D25] mb-1">Expected: {tc.expected_result}</p>
-                            <p>Status: {tc.status === 'fail' ? 'Failed to meet expected result' : 'Execution blocked'}</p>
+                            <p>Status: {tc.status === 'fail' ? 'Failed to meet expected result' : tc.status === 'reopened' ? 'Reopened after being fixed' : 'Execution blocked'}</p>
                           </div>
                           <p className="font-body-md text-body-md text-[#5C5C56]">
                             {steps.length > 0 && `Steps: ${steps.join(' \u2192 ')}`}
@@ -789,13 +915,13 @@ export function SessionReport() {
         )}
 
         {/* Not Run with AI commentary */}
-        {testCases && testCases.filter((tc) => tc.status === 'not_run').length > 0 && visibleSections.notRun && (
+        {testCases && testCases.filter((tc) => !isExecuted(tc.status)).length > 0 && visibleSections.notRun && (
           <div className="mb-8 md:mb-12">
             <div className="flex items-center justify-between mb-4 md:mb-6 pb-2 border-b border-[#DEDEDA]">
               <h2 className="font-heading text-[24px] text-[#1C1C1A] font-semibold flex items-center gap-2 flex-wrap">
                 Not Executed
                 <span className="bg-[#EEEEEC] px-2 py-0.5 rounded-lg font-heading text-[10px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold">
-                  {testCases.filter((tc) => tc.status === 'not_run').length} case{testCases.filter((tc) => tc.status === 'not_run').length > 1 ? 's' : ''}
+                  {testCases.filter((tc) => !isExecuted(tc.status)).length} case{testCases.filter((tc) => !isExecuted(tc.status)).length > 1 ? 's' : ''}
                 </span>
               </h2>
               <button
@@ -819,7 +945,7 @@ export function SessionReport() {
             )}
             <div className="space-y-2">
               {testCases
-                .filter((tc) => tc.status === 'not_run')
+                .filter((tc) => !isExecuted(tc.status))
                 .map((tc) => (
                   <div key={tc.id} className="bg-[#FFFFFF] border border-[#DEDEDA] rounded-lg p-4 md:p-5 shadow-rest">
                     <div className="flex items-center gap-2">
@@ -864,7 +990,7 @@ export function SessionReport() {
             <div className="relative pl-8 space-y-4">
               <div className="absolute left-3.5 top-2 bottom-2 w-px bg-[#DEDEDA]" />
               {testCases
-                ?.filter((tc) => tc.status !== 'not_run')
+                ?.filter((tc) => isExecuted(tc.status))
                 .sort((a, b) => {
                   const aEv = evidenceList?.find((e) => e.test_case_id === a.id)
                   const bEv = evidenceList?.find((e) => e.test_case_id === b.id)
@@ -872,7 +998,7 @@ export function SessionReport() {
                 })
                 .map((tc) => {
                   const evidence = evidenceList?.find((e) => e.test_case_id === tc.id)
-                  const dotColor = tc.status === 'pass' ? 'bg-[#1C1C1A]' : tc.status === 'fail' ? 'bg-[#C77D25]' : 'bg-[#5C5C56]'
+                  const dotColor = isFailed(tc.status) ? 'bg-[#C77D25]' : tc.status === 'pass' ? 'bg-[#1C1C1A]' : 'bg-[#5C5C56]'
                   return (
                     <div key={tc.id} className="relative">
                       <div className={`absolute -left-[22px] top-1 w-[10px] h-[10px] rounded-full ${dotColor} ring-2 ring-[#F7F7F6]`} />
@@ -880,8 +1006,8 @@ export function SessionReport() {
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="font-body-md text-[13px] text-[#1C1C1A] font-medium">{tc.title}</h3>
                           <span className={`font-mono text-[9px] uppercase tracking-[0.06em] px-1.5 py-0.5 rounded shrink-0 font-semibold
-                            ${tc.status === 'pass' ? 'bg-[#1C1C1A]/10 text-[#1C1C1A]' : 'bg-[#F3E4D0] text-[#C77D25]'}`}>
-                            {tc.status === 'pass' ? 'Passed' : tc.status === 'fail' ? 'Failed' : 'Blocked'}
+                            ${tc.status === 'pass' ? 'bg-[#1C1C1A]/10 text-[#1C1C1A]' : isFailed(tc.status) ? 'bg-[#F3E4D0] text-[#C77D25]' : 'bg-[#EEEEEC] text-[#5C5C56]'}`}>
+                            {statusLabel(tc.status)}
                           </span>
                         </div>
                         {evidence && (
@@ -893,7 +1019,7 @@ export function SessionReport() {
                             )}
                             {evidence.executed_by && (
                               <span className="font-mono text-[10px] text-[#5C5C56]">
-                                by {evidence.executed_by.slice(0, 8)}
+                                by {executorName(evidence.executed_by)}
                               </span>
                             )}
                           </div>
@@ -974,6 +1100,257 @@ export function SessionReport() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Failure Distribution */}
+        {failedCases.length > 0 && visibleSections.distribution && (
+          <div className="mb-8 md:mb-12">
+            <div className="flex items-center gap-3 mb-4 md:mb-6 pb-2 border-b border-[#DEDEDA]">
+              <h2 className="font-heading text-[24px] text-[#1C1C1A] font-semibold">Failure Distribution</h2>
+              <button
+                type="button"
+                onClick={() => toggleSection('distribution')}
+                className="font-body-md text-[12px] text-[#5C5C56] hover:text-[#1C1C1A] underline underline-offset-2 transition-colors print:hidden"
+              >
+                Hide
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div className="bg-[#FFFFFF] border border-[#DEDEDA] rounded-lg p-5 md:p-6 shadow-rest">
+                <h3 className="font-heading text-[13px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold mb-4">By Severity</h3>
+                <div className="space-y-2">
+                  {distribution.severity.map((seg) => (
+                    <div key={seg.label} className="flex items-center gap-3">
+                      <span className="w-20 font-mono text-[11px] text-[#5C5C56]">{seg.label}</span>
+                      <div className="flex-1 h-2 bg-[#EEEEEC] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${failedCases.length > 0 ? (seg.value / failedCases.length) * 100 : 0}%`,
+                            backgroundColor: seg.label === 'critical' || seg.label === 'high' ? '#C77D25' : '#8C8C84',
+                          }}
+                        />
+                      </div>
+                      <span className="w-8 text-right font-mono text-[11px] text-[#5C5C56]">{seg.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-[#FFFFFF] border border-[#DEDEDA] rounded-lg p-5 md:p-6 shadow-rest">
+                <h3 className="font-heading text-[13px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold mb-4">By Priority</h3>
+                <div className="space-y-2">
+                  {distribution.priority.map((seg) => (
+                    <div key={seg.label} className="flex items-center gap-3">
+                      <span className="w-20 font-mono text-[11px] text-[#5C5C56]">{seg.label}</span>
+                      <div className="flex-1 h-2 bg-[#EEEEEC] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${failedCases.length > 0 ? (seg.value / failedCases.length) * 100 : 0}%`,
+                            backgroundColor: seg.label === 'high' ? '#C77D25' : '#8C8C84',
+                          }}
+                        />
+                      </div>
+                      <span className="w-8 text-right font-mono text-[11px] text-[#5C5C56]">{seg.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Blockers & Open Items */}
+        {failedCases.length > 0 && visibleSections.blockers && (
+          <div className="mb-8 md:mb-12">
+            <div className="flex items-center justify-between mb-4 md:mb-6 pb-2 border-b border-[#DEDEDA]">
+              <h2 className="font-heading text-[24px] text-[#1C1C1A] font-semibold flex items-center gap-2 flex-wrap">
+                Blockers &amp; Open Items
+                <span className="bg-[#EEEEEC] px-2 py-0.5 rounded-lg font-heading text-[10px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold">
+                  {failedCases.length} item{failedCases.length > 1 ? 's' : ''}
+                </span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => toggleSection('blockers')}
+                className="font-body-md text-[12px] text-[#5C5C56] hover:text-[#1C1C1A] underline underline-offset-2 transition-colors print:hidden"
+              >
+                Hide
+              </button>
+            </div>
+            <div className="space-y-2">
+              {failedCases.map((fc) => (
+                <div key={fc.id} className="bg-[#FFFFFF] border border-[#DEDEDA] rounded-lg p-4 shadow-rest flex items-center gap-3">
+                  <span className={`font-mono text-[10px] uppercase tracking-[0.05em] px-2 py-0.5 rounded font-semibold ${fc.status === 'fail' ? 'bg-[#F3E4D0] text-[#C77D25]' : 'bg-[#EEEEEC] text-[#5C5C56]'}`}>
+                    {fc.status}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body-md text-[14px] text-[#1C1C1A] font-medium">{fc.title}</p>
+                    {fc.source_ref && <p className="font-mono text-[11px] text-[#C77D25]">{fc.source_ref}</p>}
+                  </div>
+                  <div className="font-mono text-[11px] text-[#5C5C56] shrink-0 text-right">
+                    <div>sev {fc.severity ?? 'medium'}</div>
+                    <div>pri {fc.priority ?? 'medium'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Observations with developer + PM comments */}
+        {visibleSections.observations && (
+          <div className="mb-8 md:mb-12">
+            <div className="flex items-center justify-between mb-4 md:mb-6 pb-2 border-b border-[#DEDEDA]">
+              <h2 className="font-heading text-[24px] text-[#1C1C1A] font-semibold flex items-center gap-2 flex-wrap">
+                Observations
+                {observations.length > 0 && (
+                  <span className="bg-[#EEEEEC] px-2 py-0.5 rounded-lg font-heading text-[10px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold">
+                    {observations.length}
+                  </span>
+                )}
+              </h2>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddObservation}
+                  className="font-heading text-[11px] uppercase tracking-[0.05em] font-semibold bg-[#1C1C1A] text-[#F7F7F6] px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  + Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('observations')}
+                  className="font-body-md text-[12px] text-[#5C5C56] hover:text-[#1C1C1A] underline underline-offset-2 transition-colors print:hidden"
+                >
+                  Hide
+                </button>
+              </div>
+            </div>
+            <div className="bg-[#FFFFFF] border border-[#DEDEDA] rounded-lg overflow-hidden">
+              {observations.length === 0 ? (
+                <p className="font-body-md text-[13px] text-[#8C8C84] italic px-4 py-4">No observations recorded.</p>
+              ) : (
+                observations.map((obs) => (
+                  <div key={obs.id} className="px-4 py-3 border-b border-[#DEDEDA] last:border-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <textarea
+                        value={obs.content}
+                        onChange={(e) => handleObservationChange(obs.id, 'content', e.target.value)}
+                        onBlur={() => commitObservations(observations)}
+                        placeholder="Observation\u2026"
+                        rows={1}
+                        className="flex-1 font-body-md text-[13px] text-[#1C1C1A] bg-[#EEEEEC] border border-[#DEDEDA] rounded px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-[#C77D25]/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setObservations(observations.filter((o) => o.id !== obs.id))}
+                        onBlur={() => commitObservations(observations.filter((o) => o.id !== obs.id))}
+                        className="text-[#8C8C84] hover:text-[#1C1C1A] p-1"
+                        aria-label="Remove observation"
+                      >
+                        <Icon name="close" size={14} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                      <input
+                        value={obs.developer}
+                        onChange={(e) => handleObservationChange(obs.id, 'developer', e.target.value)}
+                        onBlur={() => commitObservations(observations)}
+                        placeholder="Developer comment\u2026"
+                        className="px-2 py-1.5 font-mono text-[11px] bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none focus:ring-2 focus:ring-[#C77D25]/40"
+                      />
+                      <input
+                        value={obs.pm}
+                        onChange={(e) => handleObservationChange(obs.id, 'pm', e.target.value)}
+                        onBlur={() => commitObservations(observations)}
+                        placeholder="PM/PO comment\u2026"
+                        className="px-2 py-1.5 font-mono text-[11px] bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none focus:ring-2 focus:ring-[#C77D25]/40"
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Sign-off table */}
+        {visibleSections.signOff && (
+          <div className="mb-8 md:mb-12">
+            <div className="flex items-center justify-between mb-4 md:mb-6 pb-2 border-b border-[#DEDEDA]">
+              <h2 className="font-heading text-[24px] text-[#1C1C1A] font-semibold flex items-center gap-2 flex-wrap">
+                Sign-off
+                <span className="bg-[#EEEEEC] px-2 py-0.5 rounded-lg font-heading text-[10px] uppercase tracking-[0.05em] text-[#5C5C56] font-semibold">
+                  {signOffs.length} unit{signOffs.length === 1 ? '' : 's'}
+                </span>
+              </h2>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddSignOff}
+                  className="font-heading text-[11px] uppercase tracking-[0.05em] font-semibold bg-[#1C1C1A] text-[#F7F7F6] px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  + Add sign-off
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('signOff')}
+                  className="font-body-md text-[12px] text-[#5C5C56] hover:text-[#1C1C1A] underline underline-offset-2 transition-colors print:hidden"
+                >
+                  Hide
+                </button>
+              </div>
+            </div>
+            <div className="bg-[#FFFFFF] border border-[#DEDEDA] rounded-lg overflow-x-auto shadow-rest">
+              <table className="w-full text-[12px] font-mono">
+                <thead>
+                  <tr className="bg-[#EEEEEC] text-[#5C5C56] uppercase tracking-wider text-[10px]">
+                    <th className="text-left px-3 py-2 font-semibold">Unit</th>
+                    <th className="text-left px-3 py-2 font-semibold">Name</th>
+                    <th className="text-left px-3 py-2 font-semibold">Signature</th>
+                    <th className="text-left px-3 py-2 font-semibold">Date</th>
+                    <th className="text-left px-3 py-2 font-semibold">Concurrence</th>
+                    <th className="text-left px-3 py-2 font-semibold">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signOffs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-4 text-[#8C8C84] italic">No sign-offs recorded.</td>
+                    </tr>
+                  ) : (
+                    signOffs.map((row) => (
+                      <tr key={row.id} className="border-t border-[#DEDEDA]">
+                        <td className="px-1.5 py-1">
+                          <input value={row.unit} onChange={(e) => handleSignOffChange(row.id, 'unit', e.target.value)} onBlur={() => commitSignOffs(signOffs)} placeholder="Unit" className="w-full px-2 py-1 bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none" />
+                        </td>
+                        <td className="px-1.5 py-1">
+                          <input value={row.name} onChange={(e) => handleSignOffChange(row.id, 'name', e.target.value)} onBlur={() => commitSignOffs(signOffs)} placeholder="Name" className="w-full px-2 py-1 bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none" />
+                        </td>
+                        <td className="px-1.5 py-1">
+                          <input value={row.signature} onChange={(e) => handleSignOffChange(row.id, 'signature', e.target.value)} onBlur={() => commitSignOffs(signOffs)} placeholder="Signature" className="w-full px-2 py-1 bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none" />
+                        </td>
+                        <td className="px-1.5 py-1">
+                          <input type="date" value={row.date} onChange={(e) => handleSignOffChange(row.id, 'date', e.target.value)} onBlur={() => commitSignOffs(signOffs)} className="w-full px-2 py-1 bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none" />
+                        </td>
+                        <td className="px-1.5 py-1">
+                          <select value={row.concurrence} onChange={(e) => handleSignOffChange(row.id, 'concurrence', e.target.value)} onBlur={() => commitSignOffs(signOffs)} className="w-full px-2 py-1 bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none text-[#1C1C1A]">
+                            <option>Concur</option>
+                            <option>Concur with reservation</option>
+                            <option>Non-concur</option>
+                          </select>
+                        </td>
+                        <td className="px-1.5 py-1">
+                          <input value={row.reason} onChange={(e) => handleSignOffChange(row.id, 'reason', e.target.value)} onBlur={() => commitSignOffs(signOffs)} placeholder="Reason" className="w-full px-2 py-1 bg-[#EEEEEC] border border-[#DEDEDA] rounded focus:outline-none" />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

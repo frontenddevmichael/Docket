@@ -32,6 +32,7 @@ import { TestCaseRow } from '@/components/TestCaseRow'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { useToast } from '@/components/Toast'
 import { fetchWithAuth } from '@/lib/api'
+import { isExecuted, isFailed } from '@/lib/status'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { GenerateLoading } from '@/pages/GenerateLoading'
 import { Events } from '@/lib/analytics'
@@ -119,15 +120,15 @@ export function SessionReview() {
   }
 
   const passCount = testCases?.filter((tc) => tc.status === 'pass').length ?? 0
-  const failCount = testCases?.filter((tc) => tc.status === 'fail' || tc.status === 'blocked').length ?? 0
-  const notRunCount = testCases?.filter((tc) => tc.status === 'not_run').length ?? 0
+  const failCount = testCases?.filter((tc) => isFailed(tc.status)).length ?? 0
+  const notRunCount = testCases?.filter((tc) => !isExecuted(tc.status)).length ?? 0
 
   const filteredTestCases = useCallback(() => {
     if (!testCases) return []
     let result = testCases
     if (filter === 'pass') result = result.filter((tc) => tc.status === 'pass')
-    else if (filter === 'fail') result = result.filter((tc) => tc.status === 'fail' || tc.status === 'blocked')
-    else if (filter === 'not_run') result = result.filter((tc) => tc.status === 'not_run')
+    else if (filter === 'fail') result = result.filter((tc) => isFailed(tc.status))
+    else if (filter === 'not_run') result = result.filter((tc) => !isExecuted(tc.status))
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter((tc) => tc.title.toLowerCase().includes(q))

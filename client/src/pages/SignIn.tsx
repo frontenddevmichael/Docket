@@ -8,6 +8,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { Icon } from '@/components/Icon'
 import { AuthShell } from '@/components/AuthShell'
+import { AuthSuccess } from '@/components/AuthSuccess'
+import { getRememberedEmail, clearRememberedEmail } from '@/lib/signup-email'
 import { SignInDoodle } from '@/components/marketing/FeatureIllustrations'
 import { authLabel, authInput, authBtnPrimary, authBtnSecondary, authErrorBanner } from '@/lib/authStyles'
 import { authErrorText } from '@/lib/authError'
@@ -66,6 +68,8 @@ export function SignIn() {
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState('')
   const [focusField, setFocusField] = useState<FocusField>(null)
+  const [phase, setPhase] = useState<'form' | 'success'>('form')
+  const rememberedEmail = getRememberedEmail()
 
   const {
     register,
@@ -74,7 +78,7 @@ export function SignIn() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: rememberedEmail, password: '' },
   })
 
   const emailVal = watch('email')
@@ -85,8 +89,10 @@ export function SignIn() {
     setServerError('')
     setLoading(true)
     try {
-      await signIn(data.email, data.password)
-      navigate('/sessions', { replace: true })
+      const { error } = await signIn(data.email, data.password)
+      if (error) throw error
+      clearRememberedEmail()
+      setPhase('success')
     } catch (err: any) {
       setServerError(authErrorText(err, 'Invalid email or password'))
     } finally {
@@ -100,15 +106,29 @@ export function SignIn() {
       subtitle="Sign in to your account to continue."
       doodle={<InteractiveDoodle focusField={focusField} hasValue={hasValue} />}
       footer={
-        <>
-          Don&apos;t have an account?{' '}
-          <Link to="/sign-up" className="font-semibold text-primary hover:underline underline-offset-2 transition-colors">
-            Create one
-          </Link>
-        </>
+        phase === 'form' ? (
+          <>
+            Don&apos;t have an account?{' '}
+            <Link to="/sign-up" className="font-semibold text-primary hover:underline underline-offset-2 transition-colors">
+              Create one
+            </Link>
+          </>
+        ) : undefined
       }
     >
-      {serverError && <div className={authErrorBanner}>{serverError}</div>}
+      {phase === 'form' ? (
+        <>
+      {serverError && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0, x: [0, -6, 6, -4, 4, 0] }}
+          transition={{ duration: 0.35 }}
+          role="alert"
+          className={authErrorBanner}
+        >
+          {serverError}
+        </motion.div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div>
@@ -122,6 +142,7 @@ export function SignIn() {
             placeholder="you@company.com"
             className={authInput}
             autoComplete="email"
+            autoFocus={!rememberedEmail}
             aria-describedby={errors.email ? 'signin-email-error' : undefined}
           />
           {errors.email && (
@@ -141,6 +162,7 @@ export function SignIn() {
               placeholder="Enter your password"
               className={`${authInput} pr-10`}
               autoComplete="current-password"
+              autoFocus={!!rememberedEmail}
               aria-describedby={errors.password ? 'signin-password-error' : undefined}
             />
             <button
@@ -203,6 +225,16 @@ export function SignIn() {
           GitHub
         </button>
       </div>
+        </>
+      ) : (
+        <AuthSuccess
+          phase="success"
+          heading="Signed in"
+          message="Opening your workspace…"
+          onRedirect={() => navigate('/sessions', { replace: true })}
+          onSignIn={() => navigate('/sign-in', { replace: true })}
+        />
+      )}
     </AuthShell>
   )
 }

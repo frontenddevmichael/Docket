@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { isExecuted, isFailed } from '@/lib/status'
 
 export interface SessionWithStats {
   id: string
@@ -10,6 +11,7 @@ export interface SessionWithStats {
   created_at: string
   updated_at: string
   testCount: number
+  executedCount: number
   passCount: number
   failCount: number
   blockedCount: number
@@ -45,12 +47,13 @@ async function fetchSessionsWithStats(page: number, pageSize: number): Promise<P
 
   if (tcError) throw tcError
 
-  const stats = new Map<string, { total: number; pass: number; fail: number; blocked: number; kept: number; edited: number; deleted: number }>()
+  const stats = new Map<string, { total: number; executed: number; pass: number; fail: number; blocked: number; kept: number; edited: number; deleted: number }>()
   for (const tc of testCases ?? []) {
-    const s = stats.get(tc.session_id) ?? { total: 0, pass: 0, fail: 0, blocked: 0, kept: 0, edited: 0, deleted: 0 }
+    const s = stats.get(tc.session_id) ?? { total: 0, executed: 0, pass: 0, fail: 0, blocked: 0, kept: 0, edited: 0, deleted: 0 }
     s.total++
+    if (isExecuted(tc.status)) s.executed++
     if (tc.status === 'pass') s.pass++
-    if (tc.status === 'fail') s.fail++
+    if (isFailed(tc.status)) s.fail++
     if (tc.status === 'blocked') s.blocked++
     if (tc.feedback === 'kept') s.kept++
     if (tc.feedback === 'edited') s.edited++
@@ -59,7 +62,7 @@ async function fetchSessionsWithStats(page: number, pageSize: number): Promise<P
   }
 
   const result = sessions.map((s) => {
-    const st = stats.get(s.id) ?? { total: 0, pass: 0, fail: 0, blocked: 0, kept: 0, edited: 0, deleted: 0 }
+    const st = stats.get(s.id) ?? { total: 0, executed: 0, pass: 0, fail: 0, blocked: 0, kept: 0, edited: 0, deleted: 0 }
     return {
       id: s.id,
       title: s.title,
@@ -69,6 +72,7 @@ async function fetchSessionsWithStats(page: number, pageSize: number): Promise<P
       created_at: s.created_at,
       updated_at: s.updated_at,
       testCount: st.total,
+      executedCount: st.executed,
       passCount: st.pass,
       failCount: st.fail,
       blockedCount: st.blocked,
@@ -92,6 +96,7 @@ export function useSessionsWithStats(page: number, pageSize: number) {
 export async function fetchAllSessionStats(): Promise<{
   totalSessions: number
   totalTests: number
+  totalExecuted: number
   totalPasses: number
   totalFails: number
   totalKept: number
@@ -118,13 +123,15 @@ export async function fetchAllSessionStats(): Promise<{
   let totalKept = 0
   let totalEdited = 0
   let totalDeleted = 0
+  let totalExecuted = 0
   let activeBlockers = 0
 
   const sessionBlockers = new Map<string, number>()
   for (const tc of testCases ?? []) {
     totalTests++
+    if (isExecuted(tc.status)) totalExecuted++
     if (tc.status === 'pass') totalPasses++
-    if (tc.status === 'fail') totalFails++
+    if (isFailed(tc.status)) totalFails++
     if (tc.feedback === 'kept') totalKept++
     if (tc.feedback === 'edited') totalEdited++
     if (tc.feedback === 'deleted') totalDeleted++
@@ -139,5 +146,5 @@ export async function fetchAllSessionStats(): Promise<{
 
   const totalFeedback = totalKept + totalEdited + totalDeleted
 
-  return { totalSessions: totalSessions ?? 0, totalTests, totalPasses, totalFails, totalKept, totalEdited, totalDeleted, totalFeedback, activeBlockers }
+  return { totalSessions: totalSessions ?? 0, totalTests, totalExecuted, totalPasses, totalFails, totalKept, totalEdited, totalDeleted, totalFeedback, activeBlockers }
 }

@@ -12,6 +12,7 @@
     "check:if-blocks": "npx tsx ../scripts/no-duplicate-if-blocks.ts",
     "check:all": "npx tsx ../scripts/no-duplicate-early-returns.ts && npx tsx ../scripts/no-duplicate-if-blocks.ts",
     "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

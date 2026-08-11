@@ -20,21 +20,36 @@ const borderColors: Record<string, string> = {
   pass: 'border-l-success',
   fail: 'border-l-warning',
   blocked: 'border-l-warning',
+  reopened: 'border-l-warning',
   not_run: 'border-l-outline-variant',
+  not_applicable: 'border-l-outline-variant',
+  fixed: 'border-l-outline-variant',
+  controlled_live: 'border-l-outline-variant',
+  uat: 'border-l-outline-variant',
 }
 
 const statusGlyphs: Record<string, string> = {
   pass: '\u2713',
   fail: '\u2691',
   blocked: '\u2298',
+  reopened: '\u21BA',
   not_run: '\u25CB',
+  not_applicable: '\u2300',
+  fixed: '\u270E',
+  controlled_live: '\u25C9',
+  uat: '\u2302',
 }
 
 const statusColors: Record<string, string> = {
   pass: 'border-success text-success',
   fail: 'border-warning bg-warning text-white',
   blocked: 'border-warning bg-warning text-white',
+  reopened: 'border-warning bg-warning text-white',
   not_run: 'border-outline-variant text-on-surface-variant',
+  not_applicable: 'border-outline-variant text-on-surface-variant',
+  fixed: 'border-outline-variant text-on-surface-variant',
+  controlled_live: 'border-outline-variant text-on-surface-variant',
+  uat: 'border-outline-variant text-on-surface-variant',
 }
 
 export const TestCaseRow = memo(function TestCaseRow({ testCase, sessionId, selected, onToggleSelect, onDuplicate, onDelete, onExecute }: Props) {

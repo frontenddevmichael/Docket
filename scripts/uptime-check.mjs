@@ -38,6 +38,17 @@ for (const target of targets) {
     const res = await fetchWithTimeout(target.url, target.headers, 10_000)
     const ok = target.anyStatusOk ? res.status < 500 : res.ok
     if (ok) {
+      // Extra gate for the API: the service-role key must be valid, otherwise
+      // admin routes silently 500 and the app is effectively broken.
+      if (target.name === 'api') {
+        let body = null
+        try { body = await res.json() } catch { /* not json */ }
+        if (body && body.serviceRoleOk === false) {
+          console.log(`WARN ${Date.now() - start}ms ${target.url} (HTTP ${res.status} but serviceRoleOk=false — rotate the Supabase service_role key)`)
+          failed.push(`${target.name} (serviceRoleOk=false — rotate the Supabase service_role key)`)
+          continue
+        }
+      }
       console.log(`OK   ${Date.now() - start}ms ${target.url}`)
     } else {
       console.log(`DOWN ${Date.now() - start}ms ${target.url} (HTTP ${res.status})`)

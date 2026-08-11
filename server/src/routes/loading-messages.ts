@@ -2,7 +2,18 @@ import { Router } from 'express'
 import { z } from 'zod'
 import OpenAI from 'openai'
 import { requireAuth } from '../lib/auth-middleware.js'
-import { FALLBACK_LOADING_MESSAGES } from '../../../shared/loading-messages.js'
+
+// Mirror of shared/loading-messages.ts (client imports the shared copy via the
+// @shared alias). Kept server-local so the server build stays self-contained
+// and emits a clean dist/ layout without pulling in files above src/.
+const FALLBACK_LOADING_MESSAGES = [
+  'Parsing your requirements\u2026',
+  'Mapping test scenarios\u2026',
+  'Checking for edge cases\u2026',
+  'Drafting test cases\u2026',
+  'Validating coverage\u2026',
+  'Finalizing test suite\u2026',
+] as const
 
 const loadingMessagesSchema = z.object({
   requirementsText: z.string().optional(),

@@ -58,7 +58,7 @@ export function Dashboard() {
   const totalTests = stats?.totalTests ?? 0
   const totalPasses = stats?.totalPasses ?? 0
   const totalFails = stats?.totalFails ?? 0
-  const totalExecuted = totalPasses + totalFails
+  const totalExecuted = stats?.totalExecuted ?? 0
   const passRate = totalTests > 0 ? Math.round((totalPasses / totalTests) * 100) : 0
   const activeBlockers = stats?.activeBlockers ?? 0
   const totalKept = stats?.totalKept ?? 0
@@ -345,7 +345,7 @@ export function Dashboard() {
             {/* Session Cards — modular grid */}
             <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4${staggerSessions ? ' stagger-enter' : ''}`}>
               {pagedSessions.map((session, i) => {
-                const executed = session.passCount + session.failCount + session.blockedCount
+                const executed = session.executedCount
                 const execRate = session.testCount > 0 ? Math.round((executed / session.testCount) * 100) : 0
                 const hasFails = session.failCount > 0
                 const hasScreenshot = !!session.screenshot_url
